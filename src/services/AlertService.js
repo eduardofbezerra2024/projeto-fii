@@ -1,9 +1,67 @@
-
 import { supabase } from '@/lib/customSupabaseClient';
 import { getFiiQuote } from '@/services/fiiService';
 import { EmailService } from '@/services/EmailService';
 import useAlertasStore from '@/store/alertasStore';
 
+// --- FUNÇÕES QUE FALTAVAM (Adicionadas para corrigir o erro) ---
+
+export const getAlertPreferences = async () => {
+  // Pega as configurações do usuário do banco
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('user_settings')
+    .select('*')
+    .eq('user_id', user.id)
+    .single();
+
+  if (error) {
+    console.error('Erro ao buscar preferencias:', error);
+    return null;
+  }
+  return data;
+};
+
+export const saveAlertPreferences = async (preferences) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Usuário não logado' };
+
+  const { error } = await supabase
+    .from('user_settings')
+    .upsert({ 
+      user_id: user.id,
+      ...preferences,
+      updated_at: new Date()
+    });
+
+  return { error };
+};
+
+export const getAlertHistory = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('alerts')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (error) return [];
+  return data;
+};
+
+export const sendEmailAlert = async (alertData) => {
+    return await EmailService.sendNotification(alertData);
+};
+
+
+// --- FIM DAS FUNÇÕES ADICIONADAS ---
+
+
+// Objeto Principal (Mantido do seu código original)
 export const AlertService = {
   /**
    * Main function to check prices and trigger alerts.
