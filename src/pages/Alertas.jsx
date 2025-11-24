@@ -7,7 +7,7 @@ import AlertsList from '@/components/alertas/AlertsList';
 import AlertForm from '@/components/alertas/AlertForm';
 import { useAlertas } from '@/hooks/useAlertas';
 import { toast } from '@/components/ui/use-toast';
-import { AlertService } from '@/services/AlertService';
+import { AlertService } from '@/services/FiiAlertService';
 
 const Alertas = () => {
   const { alerts, addAlert, updateAlert, removeAlert } = useAlertas();
