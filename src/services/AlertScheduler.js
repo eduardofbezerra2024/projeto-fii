@@ -1,5 +1,5 @@
 
-import { AlertService } from './AlertService';
+import { AlertService } from './FiiAlertService';
 
 const STORAGE_KEY = 'fii_last_check_date';
 
