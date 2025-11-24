@@ -1,86 +1,52 @@
-
-import { supabase } from '@/lib/customSupabaseClient';
 import { getFiiQuote } from '@/services/fiiService';
-import { toast } from '@/components/ui/use-toast';
 
 export const YieldService = {
   /**
-   * Updates yields for a list of FIIs.
-   * Fetches latest data from API, saves history to Supabase, and returns updated data.
-   * @param {Array} portfolio - Array of FII objects from the store
-   * @returns {Promise<Array>} - Array of updated yield objects { ticker, yield, price }
+   * Recupera a data da última atualização do localStorage
    */
-  async updatePortfolioYields(portfolio) {
-    if (!portfolio || portfolio.length === 0) return [];
+  getLastUpdate: () => {
+    return localStorage.getItem('fii_last_update');
+  },
 
+  /**
+   * Salva a data atual como última atualização
+   */
+  setLastUpdate: () => {
+    localStorage.setItem('fii_last_update', new Date().toISOString());
+  },
+
+  /**
+   * Percorre a carteira, busca dados atualizados e retorna o que mudou.
+   * @param {Array} portfolio Array com os FIIs da carteira
+   */
+  updatePortfolioYields: async (portfolio) => {
     const updates = [];
-    const errors = [];
+    
+    console.log("Iniciando atualização de Yields...");
 
-    // Create a unique list of tickers to avoid duplicate requests
-    const uniqueTickers = [...new Set(portfolio.map(item => item.ticker))];
-
-    console.log(`[YieldService] Starting update for ${uniqueTickers.length} tickers...`);
-
-    for (const ticker of uniqueTickers) {
+    // Vamos processar um por um para não sobrecarregar a API
+    for (const fii of portfolio) {
       try {
-        // 1. Fetch latest data from Brapi via fiiService
-        const quote = await getFiiQuote(ticker);
-
+        // Busca a cotação usando o nosso fiiService blindado
+        const quote = await getFiiQuote(fii.ticker);
+        
         if (quote) {
-          const yieldValue = quote.dividendYield || 0;
-          const currentPrice = quote.price || 0;
+          console.log(`Dados recebidos para ${fii.ticker}:`, quote);
 
-          // 2. Store history in Supabase
-          const { error: dbError } = await supabase
-            .from('fii_yields')
-            .insert({
-              fii_ticker: ticker,
-              yield_value: yieldValue,
-              price: currentPrice,
-              date: new Date().toISOString().split('T')[0]
-            });
-
-          if (dbError) {
-            console.error(`[YieldService] Error saving history for ${ticker}:`, dbError);
-            // We continue even if history save fails, as we want to update the UI
-          }
-
+          // Aqui está o segredo: garantimos que o dividendYield seja passado adiante
           updates.push({
-            ticker,
-            dividendYield: yieldValue,
-            currentPrice: currentPrice,
+            id: fii.id,
+            currentPrice: quote.price,
+            priceChange: quote.price - fii.price, // Diferença do preço médio
+            dividendYield: quote.dividendYield || 0, // <--- O PULO DO GATO ESTÁ AQUI
             lastUpdated: new Date().toISOString()
           });
         }
       } catch (error) {
-        console.error(`[YieldService] Failed to update ${ticker}:`, error);
-        errors.push(ticker);
+        console.error(`Falha ao atualizar ${fii.ticker}:`, error);
       }
-      
-      // Small delay to avoid rate limiting if many items
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-
-    if (errors.length > 0) {
-      console.warn(`[YieldService] Completed with errors for: ${errors.join(', ')}`);
-    } else {
-      console.log('[YieldService] All yields updated successfully');
     }
 
     return updates;
-  },
-
-  /**
-   * Gets the last update timestamp from local storage or null
-   */
-  getLastUpdate() {
-    return localStorage.getItem('fii_yield_last_update');
-  },
-
-  /**
-   * Sets the last update timestamp
-   */
-  setLastUpdate() {
-    localStorage.setItem('fii_yield_last_update', new Date().toISOString());
   }
 };
