@@ -58,6 +58,7 @@ export const searchFii = async (ticker) => {
  */
 export const getFiiQuote = async (ticker) => {
   try {
+    // Adicionamos &fundamental=true para garantir que venham dados como DY e Setor
     const url = `${BASE_URL}/quote/${ticker}?token=${API_TOKEN}&range=1d&fundamental=true`;
     const data = await fetchWithTimeout(url);
     
@@ -69,37 +70,33 @@ export const getFiiQuote = async (ticker) => {
 
     const result = data.results[0];
 
-    // Handle missing dividendYield - set to null to indicate it needs to be filled.
-    const dividendYield = result.dividendYield || null;
+    // --- LÓGICA DO YIELD ---
+    // A Brapi retorna dividendYield. Se vier null ou undefined, colocamos 0.
+    const dividendYield = result.dividendYield || 0;
 
     // --- SECTOR DETECTION LOGIC ---
     let sector = result.sector;
-    console.log(`[Sector Debug] Initial sector from API for ${ticker}:`, sector);
-
+    
     if (!sector && result.longName) {
       const longNameLower = result.longName.toLowerCase();
-      console.log(`[Sector Debug] No sector from API. Analyzing longName: "${result.longName}"`);
-
+      
       if (longNameLower.includes('imobiliário') || longNameLower.includes('imobiliario')) {
         sector = 'Fundo Imobiliário';
-        console.log(`[Sector Debug] Keyword 'imobiliario' found. Sector set to: "${sector}"`);
       } else if (longNameLower.includes('renda fixa')) {
         sector = 'Renda Fixa';
-        console.log(`[Sector Debug] Keyword 'renda fixa' found. Sector set to: "${sector}"`);
       }
     }
 
     // Default to "Fundo Imobiliário" if still no sector is found
     if (!sector) {
       sector = 'Fundo Imobiliário';
-      console.log(`[Sector Debug] No keywords matched. Defaulting sector to: "${sector}"`);
     }
     // --- END SECTOR DETECTION LOGIC ---
 
     return {
       price: result.regularMarketPrice || 0,
       vpa: result.bookValue || 0,
-      dividendYield: dividendYield,
+      dividendYield: dividendYield, // Agora garantimos que esse campo vai preenchido
       sector: sector,
       liquidity: result.liquidity || 'Não informado',
       name: result.longName || 'Nome não disponível',
@@ -126,7 +123,8 @@ export const getFiiDividendHistory = async (ticker) => {
     const data = await fetchWithTimeout(url);
 
     if (data.error || !data.results || !data.results[0].dividendsData?.cashDividends) {
-      throw new Error(data.error || 'Histórico de dividendos não encontrado');
+      // Se não tiver histórico, não é necessariamente um erro fatal, retornamos array vazio
+      return [];
     }
 
     const dividends = data.results[0].dividendsData.cashDividends;
@@ -137,11 +135,7 @@ export const getFiiDividendHistory = async (ticker) => {
     })).slice(0, 12); // Return last 12 dividends
   } catch (error) {
     console.error("getFiiDividendHistory error:", error);
-    toast({
-        title: 'Erro ao buscar Dividendos',
-        description: error.message,
-        variant: 'destructive',
-    });
+    // Removemos o toast de erro aqui para não poluir a tela se um FII específico falhar
     return [];
   }
 };

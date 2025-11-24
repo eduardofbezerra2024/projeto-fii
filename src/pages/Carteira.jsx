@@ -1,7 +1,6 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Helmet } from 'react-helmet';
-import { Plus, Grid, List, RefreshCw, Clock } from 'lucide-react';
+import { Plus, Grid, List, RefreshCw, Clock, Percent } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CarteiraTable from '@/components/carteira/CarteiraTable';
 import FIICard from '@/components/carteira/FIICard';
@@ -34,6 +33,20 @@ const Carteira = () => {
       handleRefreshYields();
     }
   }, []);
+
+  // --- CÁLCULO AUTOMÁTICO DO YIELD MÉDIO DA CARTEIRA ---
+  const averageYield = useMemo(() => {
+    if (!portfolio || portfolio.length === 0 || metrics.currentValue === 0) return 0;
+
+    const weightedSum = portfolio.reduce((acc, fii) => {
+      const fiiTotalValue = (fii.currentPrice || 0) * (fii.quantity || 0);
+      const fiiYield = fii.dividendYield || 0;
+      return acc + (fiiTotalValue * fiiYield);
+    }, 0);
+
+    return weightedSum / metrics.currentValue;
+  }, [portfolio, metrics.currentValue]);
+  // -----------------------------------------------------
   
   const handleAddFII = () => {
     setEditingFII(null);
@@ -78,6 +91,7 @@ const Carteira = () => {
 
     setIsUpdating(true);
     try {
+      // O YieldService vai usar o getFiiQuote que acabamos de atualizar
       const updates = await YieldService.updatePortfolioYields(portfolio);
       
       if (updates.length > 0) {
@@ -167,7 +181,8 @@ const Carteira = () => {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Grid de Métricas com NOVO Card de Yield */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Investido</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(metrics.totalInvested)}</p>
@@ -177,14 +192,19 @@ const Carteira = () => {
             <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(metrics.currentValue)}</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Yield Médio (12m)</p>
+            <div className="flex items-center">
+                <Percent className="h-5 w-5 text-blue-500 mr-2" />
+                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {averageYield.toFixed(2)}%
+                </p>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Lucro/Prejuízo</p>
             <p className={`text-2xl font-bold ${metrics.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatCurrency(metrics.profitLoss)}
             </p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">FIIs na Carteira</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{portfolio.length}</p>
           </div>
         </div>
         
