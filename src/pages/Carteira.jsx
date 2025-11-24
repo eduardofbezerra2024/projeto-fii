@@ -196,8 +196,8 @@ const Carteira = () => {
             <div className="flex items-center">
                 <Percent className="h-5 w-5 text-blue-500 mr-2" />
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {averageYield.toFixed(2)}%
-                </p>
+{/* Se o número for pequeno (ex: 0.12), multiplica por 100. Se já for grande (12), mostra direto */}
+{(averageYield > 1 ? averageYield : averageYield * 100).toFixed(2)}%                </p>
             </div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
