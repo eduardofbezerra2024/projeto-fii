@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { toast } from '@/components/ui/use-toast';
-import { getAlertPreferences, saveAlertPreferences, getAlertHistory, sendEmailAlert } from '@/services/alertService';
+import { getAlertPreferences, saveAlertPreferences, getAlertHistory, sendEmailAlert } from '@/services/AlertService';
 import { sendWhatsAppMessage } from '@/services/twilioService';
 import { Switch } from '@/components/ui/switch';
 
