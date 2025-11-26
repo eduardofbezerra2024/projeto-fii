@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/customSupabaseClient';
 import { getFiiQuote } from '@/services/fiiService';
 import { EmailService } from '@/services/EmailService';
-import { NewsService } from '@/services/NewsService'; // <--- NOVO IMPORT
+import { NewsService } from '@/services/NewsService';
 import useAlertasStore from '@/store/alertasStore';
 
 // --- FUNÇÕES AUXILIARES DE BANCO DE DADOS ---
@@ -9,7 +9,8 @@ export const getAlertPreferences = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data } = await supabase.from('user_settings').select('*').eq('user_id', user.id).single();
+  // CORREÇÃO: Nome da tabela alterado para 'alert_preferences'
+  const { data } = await supabase.from('alert_preferences').select('*').eq('user_id', user.id).single();
   return data;
 };
 
@@ -17,7 +18,8 @@ export const saveAlertPreferences = async (preferences) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não logado' };
 
-  const { error } = await supabase.from('user_settings').upsert({ user_id: user.id, ...preferences, updated_at: new Date() });
+  // CORREÇÃO: Nome da tabela alterado para 'alert_preferences'
+  const { error } = await supabase.from('alert_preferences').upsert({ user_id: user.id, ...preferences, updated_at: new Date() });
   return { error };
 };
 
@@ -41,7 +43,7 @@ export const AlertService = {
 
     console.log('Verificando preços e notícias...');
     
-    // 1. Busca preferências do usuário para saber se quer notícias
+    // 1. Busca preferências do usuário
     const prefs = await getAlertPreferences();
     const enableNews = prefs?.enable_news_alerts || false;
 
@@ -51,17 +53,16 @@ export const AlertService = {
 
     for (const ticker of tickersToCheck) {
       try {
-        // A. VERIFICAÇÃO DE PREÇO (Lógica Existente)
+        // A. VERIFICAÇÃO DE PREÇO
         const quote = await getFiiQuote(ticker);
         if (quote) {
             const currentPrice = quote.price;
             await this.evaluatePriceRules(user.id, ticker, currentPrice, activeAlerts);
         }
 
-        // B. VERIFICAÇÃO DE NOTÍCIAS (NOVA LÓGICA)
+        // B. VERIFICAÇÃO DE NOTÍCIAS
         if (enableNews) {
             const news = await NewsService.getRecentNews(ticker);
-            // Pega apenas notícias de HOJE
             const today = new Date().toISOString().split('T')[0];
             
             const freshNews = news.filter(n => {
@@ -70,7 +71,6 @@ export const AlertService = {
             });
 
             if (freshNews.length > 0) {
-                // Se tiver notícia nova hoje, dispara alerta
                 await this.triggerNewsAlert(user.id, ticker, freshNews[0]);
             }
         }
@@ -95,7 +95,6 @@ export const AlertService = {
   },
 
   async triggerAlert(userId, alertConfig, currentPrice) {
-    // Salva no banco e notifica (lógica simplificada da versão anterior)
     await supabase.from('alerts').insert({
         user_id: userId,
         fii_ticker: alertConfig.ticker,
@@ -104,7 +103,6 @@ export const AlertService = {
         message: `Preço atingido: R$ ${currentPrice}`
     });
     
-    // Notifica na store local
     useAlertasStore.getState().addNotification({
         id: Date.now(),
         ticker: alertConfig.ticker,
@@ -114,11 +112,9 @@ export const AlertService = {
     });
   },
 
-  // NOVA FUNÇÃO: DISPARAR ALERTA DE NOTÍCIA
   async triggerNewsAlert(userId, ticker, newsItem) {
     console.log(`Nova notícia encontrada para ${ticker}: ${newsItem.title}`);
     
-    // Salva no histórico
     await supabase.from('alerts').insert({
         user_id: userId,
         fii_ticker: ticker,
@@ -126,12 +122,11 @@ export const AlertService = {
         message: `Notícia: ${newsItem.title}`
     });
 
-    // Notifica na tela
     useAlertasStore.getState().addNotification({
         id: Date.now(),
         ticker: ticker,
         message: `Nova notícia sobre ${ticker}`,
-        link: newsItem.link, // Link para ler a notícia
+        link: newsItem.link,
         type: 'news',
         timestamp: new Date()
     });
