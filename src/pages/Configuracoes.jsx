@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Helmet } from 'react-helmet';
-import { User, Download, MessageSquare, Mail, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { User, Download, MessageSquare, Mail, RefreshCw, CheckCircle, XCircle, Newspaper } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/hooks/useTheme';
 import { toast } from '@/components/ui/use-toast';
-import { getAlertPreferences, saveAlertPreferences, getAlertHistory, sendEmailAlert } from '@/services/FiiAlertService'; // Correção Vercel
+import { getAlertPreferences, saveAlertPreferences, getAlertHistory, sendEmailAlert } from '@/services/FiiAlertService';
 import { sendWhatsAppMessage } from '@/services/twilioService';
 import { Switch } from '@/components/ui/switch';
 
@@ -188,7 +188,20 @@ const Configuracoes = () => {
                   <div className="flex items-center justify-between"><Label htmlFor="enable_dividend_alerts">Habilitar alertas de mudança de dividendo</Label><Switch id="enable_dividend_alerts" checked={alertPrefs.enable_dividend_alerts} onCheckedChange={(c) => handleAlertsSwitchChange('enable_dividend_alerts', c)} /></div>
                    {alertPrefs.enable_dividend_alerts && (<div><Label htmlFor="dividend_threshold">Limiar de mudança de dividendo (%)</Label><Input id="dividend_threshold" name="dividend_threshold" type="number" value={alertPrefs.dividend_threshold} onChange={handleAlertsChange} /></div>)}
                 </div>
-                <div className="flex items-center justify-between"><Label htmlFor="enable_news_alerts">Habilitar alertas de notícias (Em breve)</Label><Switch id="enable_news_alerts" checked={alertPrefs.enable_news_alerts} onCheckedChange={(c) => handleAlertsSwitchChange('enable_news_alerts', c)} disabled /></div>
+                
+                {/* AQUI ESTÁ A MUDANÇA DA NOTÍCIA */}
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center">
+                        <Newspaper className="h-4 w-4 mr-2 text-blue-500" />
+                        <Label htmlFor="enable_news_alerts" className="cursor-pointer">Habilitar alertas de notícias relevantes</Label>
+                    </div>
+                    <Switch 
+                        id="enable_news_alerts" 
+                        checked={alertPrefs.enable_news_alerts} 
+                        onCheckedChange={(c) => handleAlertsSwitchChange('enable_news_alerts', c)} 
+                    />
+                </div>
+
                 <Button type="submit" className="w-full bg-green-600 hover:bg-green-700" disabled={isSaving}>{isSaving && <RefreshCw className="h-4 w-4 animate-spin mr-2" />} Salvar Configurações de Alerta</Button>
               </form>
             )}
@@ -259,3 +272,5 @@ const Configuracoes = () => {
 };
 
 export default Configuracoes;
+
+
