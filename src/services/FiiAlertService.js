@@ -42,52 +42,57 @@ export const AlertService = {
 
         console.log('Verificando preços e notícias...');
         
-        // 1. Busca preferências do usuário
+        // Contadores para o relatório final
+        let totalChecked = 0;
+        let totalTriggered = 0;
+
         const prefs = await getAlertPreferences();
         const enableNews = prefs?.enable_news_alerts || false;
 
         const state = useAlertasStore.getState();
         const activeAlerts = state.alerts.filter(a => a.status === 'active');
         
-        // Se não tiver alertas ativos, avisa que terminou tudo bem
         if (activeAlerts.length === 0) {
-            return { success: true, message: 'Nenhum alerta ativo' };
+            return { success: true, checked: 0, triggered: 0, message: 'Nenhum alerta ativo' };
         }
 
         const tickersToCheck = [...new Set(activeAlerts.map(a => a.ticker))];
 
         for (const ticker of tickersToCheck) {
-        try {
-            // A. VERIFICAÇÃO DE PREÇO
-            const quote = await getFiiQuote(ticker);
-            if (quote) {
-                const currentPrice = quote.price;
-                await this.evaluatePriceRules(user.id, ticker, currentPrice, activeAlerts);
-            }
-
-            // B. VERIFICAÇÃO DE NOTÍCIAS
-            if (enableNews) {
-                const news = await NewsService.getRecentNews(ticker);
-                const today = new Date().toISOString().split('T')[0];
-                
-                const freshNews = news.filter(n => {
-                    const newsDate = new Date(n.date).toISOString().split('T')[0];
-                    return newsDate === today;
-                });
-
-                if (freshNews.length > 0) {
-                    await this.triggerNewsAlert(user.id, ticker, freshNews[0]);
+            totalChecked++; // Conta mais um FII verificado
+            try {
+                // A. VERIFICAÇÃO DE PREÇO
+                const quote = await getFiiQuote(ticker);
+                if (quote) {
+                    const currentPrice = quote.price;
+                    // Soma os alertas disparados aqui
+                    const triggeredCount = await this.evaluatePriceRules(user.id, ticker, currentPrice, activeAlerts);
+                    totalTriggered += triggeredCount;
                 }
-            }
 
-        } catch (err) {
-            console.error(`Erro ao verificar ${ticker}:`, err);
-        }
+                // B. VERIFICAÇÃO DE NOTÍCIAS
+                if (enableNews) {
+                    const news = await NewsService.getRecentNews(ticker);
+                    const today = new Date().toISOString().split('T')[0];
+                    
+                    const freshNews = news.filter(n => {
+                        const newsDate = new Date(n.date).toISOString().split('T')[0];
+                        return newsDate === today;
+                    });
+
+                    if (freshNews.length > 0) {
+                        await this.triggerNewsAlert(user.id, ticker, freshNews[0]);
+                        totalTriggered++; // Conta alerta de notícia
+                    }
+                }
+
+            } catch (err) {
+                console.error(`Erro ao verificar ${ticker}:`, err);
+            }
         }
         
-        // --- AQUI ESTAVA FALTANDO! ---
-        // Avisamos ao botão que tudo correu bem
-        return { success: true };
+        // AGORA SIM: Retornamos os números para o botão mostrar na tela!
+        return { success: true, checked: totalChecked, triggered: totalTriggered };
 
     } catch (globalError) {
         console.error('Erro geral no checkDailyPrices:', globalError);
@@ -97,6 +102,8 @@ export const AlertService = {
 
   async evaluatePriceRules(userId, ticker, currentPrice, allAlerts) {
     const tickerAlerts = allAlerts.filter(a => a.ticker === ticker);
+    let count = 0;
+
     for (const alert of tickerAlerts) {
       let triggered = false;
       if (alert.type === 'price_below' && currentPrice <= alert.value) triggered = true;
@@ -104,8 +111,10 @@ export const AlertService = {
 
       if (triggered) {
         await this.triggerAlert(userId, alert, currentPrice);
+        count++; // Conta quantos regras bateram
       }
     }
+    return count; // Retorna a quantidade de alertas
   },
 
   async triggerAlert(userId, alertConfig, currentPrice) {
