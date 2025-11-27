@@ -1,56 +1,63 @@
-
 import { supabase } from '@/lib/customSupabaseClient';
+
+// --- SUAS CHAVES DO EMAILJS ---
+const SERVICE_ID = 'service_94dm74b';      // Já preenchi com o seu! ✅
+const TEMPLATE_ID = 'COLAR_SEU_TEMPLATE_ID_AQUI'; // <--- Cole o Template ID aqui
+const PUBLIC_KEY = 'COLAR_SUA_PUBLIC_KEY_AQUI';   // <--- Cole a Public Key aqui
 
 export const EmailService = {
   /**
-   * Sends an email notification via the secure Supabase Edge Function using Gmail SMTP.
-   * 
-   * @param {object} params
-   * @param {string} [params.to] - Recipient email. If omitted, sends to current authenticated user.
-   * @param {string} params.subject - Email subject
-   * @param {string} params.text - Plain text content
-   * @param {string} [params.html] - HTML content (optional)
-   * @returns {Promise<{success: boolean, error?: any}>}
+   * Envia notificação usando EmailJS (Direto do Frontend)
    */
   async sendNotification({ to, subject, text, html }) {
     try {
-      // Security Note: SMTP credentials (GMAIL_USER, GMAIL_APP_PASSWORD) are NOT stored here.
-      // They are stored securely in Supabase Secrets and accessed only by the Edge Function.
-      
       let recipient = to;
       
-      // If no recipient is specified, default to the currently logged-in user
+      // Se não tiver destinatário, pega o usuário logado
       if (!recipient) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user && user.email) {
           recipient = user.email;
         } else {
-          throw new Error("No recipient specified and user is not authenticated.");
+          console.error("Sem destinatário para o email");
+          return { success: false, error: "Usuário não logado" };
         }
       }
 
-      // Invoke the secure edge function to handle the actual SMTP transmission
-      const { data, error } = await supabase.functions.invoke('send-email-alert', {
+      console.log(`Tentando enviar email para: ${recipient}`);
+
+      // Monta os dados para o EmailJS
+      const templateParams = {
+        to_email: recipient,
+        subject: subject,
+        message: text || html,
+      };
+
+      // Envia usando a API REST do EmailJS
+      const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          to: recipient,
-          subject,
-          text,
-          html
-        })
+          service_id: SERVICE_ID,
+          template_id: TEMPLATE_ID,
+          user_id: PUBLIC_KEY,
+          template_params: templateParams,
+        }),
       });
 
-      if (error) {
-        console.error('Supabase Function Error:', error);
-        throw error;
+      if (response.ok) {
+        console.log('Email enviado com sucesso!');
+        return { success: true };
+      } else {
+        const errorText = await response.text();
+        console.error('Erro EmailJS:', errorText);
+        throw new Error('Falha ao enviar email: ' + errorText);
       }
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to send email via SMTP service');
-      }
-
-      return { success: true, data };
     } catch (error) {
-      console.error('Email sending failed:', error);
+      console.error('Falha grave no envio de email:', error);
       return { success: false, error: error.message || error };
     }
   }
