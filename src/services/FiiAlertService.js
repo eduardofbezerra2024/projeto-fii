@@ -9,7 +9,6 @@ export const getAlertPreferences = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  // CORREÇÃO: Nome da tabela alterado para 'alert_preferences'
   const { data } = await supabase.from('alert_preferences').select('*').eq('user_id', user.id).single();
   return data;
 };
@@ -18,7 +17,6 @@ export const saveAlertPreferences = async (preferences) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Usuário não logado' };
 
-  // CORREÇÃO: Nome da tabela alterado para 'alert_preferences'
   const { error } = await supabase.from('alert_preferences').upsert({ user_id: user.id, ...preferences, updated_at: new Date() });
   return { error };
 };
@@ -38,46 +36,62 @@ export const sendEmailAlert = async (alertData) => {
 
 export const AlertService = {
   async checkDailyPrices() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: 'Usuário não autenticado' };
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return { error: 'Usuário não autenticado' };
 
-    console.log('Verificando preços e notícias...');
-    
-    // 1. Busca preferências do usuário
-    const prefs = await getAlertPreferences();
-    const enableNews = prefs?.enable_news_alerts || false;
+        console.log('Verificando preços e notícias...');
+        
+        // 1. Busca preferências do usuário
+        const prefs = await getAlertPreferences();
+        const enableNews = prefs?.enable_news_alerts || false;
 
-    const state = useAlertasStore.getState();
-    const activeAlerts = state.alerts.filter(a => a.status === 'active');
-    const tickersToCheck = [...new Set(activeAlerts.map(a => a.ticker))];
-
-    for (const ticker of tickersToCheck) {
-      try {
-        // A. VERIFICAÇÃO DE PREÇO
-        const quote = await getFiiQuote(ticker);
-        if (quote) {
-            const currentPrice = quote.price;
-            await this.evaluatePriceRules(user.id, ticker, currentPrice, activeAlerts);
+        const state = useAlertasStore.getState();
+        const activeAlerts = state.alerts.filter(a => a.status === 'active');
+        
+        // Se não tiver alertas ativos, avisa que terminou tudo bem
+        if (activeAlerts.length === 0) {
+            return { success: true, message: 'Nenhum alerta ativo' };
         }
 
-        // B. VERIFICAÇÃO DE NOTÍCIAS
-        if (enableNews) {
-            const news = await NewsService.getRecentNews(ticker);
-            const today = new Date().toISOString().split('T')[0];
-            
-            const freshNews = news.filter(n => {
-                const newsDate = new Date(n.date).toISOString().split('T')[0];
-                return newsDate === today;
-            });
+        const tickersToCheck = [...new Set(activeAlerts.map(a => a.ticker))];
 
-            if (freshNews.length > 0) {
-                await this.triggerNewsAlert(user.id, ticker, freshNews[0]);
+        for (const ticker of tickersToCheck) {
+        try {
+            // A. VERIFICAÇÃO DE PREÇO
+            const quote = await getFiiQuote(ticker);
+            if (quote) {
+                const currentPrice = quote.price;
+                await this.evaluatePriceRules(user.id, ticker, currentPrice, activeAlerts);
             }
-        }
 
-      } catch (err) {
-        console.error(`Erro ao verificar ${ticker}:`, err);
-      }
+            // B. VERIFICAÇÃO DE NOTÍCIAS
+            if (enableNews) {
+                const news = await NewsService.getRecentNews(ticker);
+                const today = new Date().toISOString().split('T')[0];
+                
+                const freshNews = news.filter(n => {
+                    const newsDate = new Date(n.date).toISOString().split('T')[0];
+                    return newsDate === today;
+                });
+
+                if (freshNews.length > 0) {
+                    await this.triggerNewsAlert(user.id, ticker, freshNews[0]);
+                }
+            }
+
+        } catch (err) {
+            console.error(`Erro ao verificar ${ticker}:`, err);
+        }
+        }
+        
+        // --- AQUI ESTAVA FALTANDO! ---
+        // Avisamos ao botão que tudo correu bem
+        return { success: true };
+
+    } catch (globalError) {
+        console.error('Erro geral no checkDailyPrices:', globalError);
+        return { error: 'Falha interna na verificação' };
     }
   },
 
