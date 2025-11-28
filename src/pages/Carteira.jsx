@@ -5,29 +5,35 @@ import { Button } from '@/components/ui/button';
 import CarteiraTable from '@/components/carteira/CarteiraTable';
 import FIICard from '@/components/carteira/FIICard';
 import AddFIIModal from '@/components/carteira/AddFIIModal';
-import { useCarteira } from '@/hooks/useCarteira';
 import { formatCurrency } from '@/utils/formatters';
 import { toast } from '@/components/ui/use-toast';
 import { YieldService } from '@/services/YieldService';
-import useCarteiraStore from '@/store/carteiraStore';
+import useCarteiraStore from '@/store/carteiraStore'; // Usando a store direto
 
 const Carteira = () => {
-  const { portfolio, metrics, addFII, updateFII, removeFII } = useCarteira();
-  const { updateYields } = useCarteiraStore();
-// Adicione o fetchPortfolio aqui embaixo:
-  const { fetchPortfolio, isLoading } = useCarteiraStore(); // <--- Mude essa linha  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Usamos a store diretamente agora, pois ela gerencia tudo
+  const { 
+    portfolio, 
+    metrics, 
+    addFII, 
+    updateFII, 
+    removeFII, 
+    updateYields, 
+    fetchPortfolio, 
+    isLoading 
+  } = useCarteiraStore();
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFII, setEditingFII] = useState(null);
   const [viewMode, setViewMode] = useState('table');
   const [isUpdating, setIsUpdating] = useState(false);
   const [lastUpdateDate, setLastUpdateDate] = useState(null);
 
-  // Load last update time on mount
- useEffect(() => {
-  // CARREGAR DADOS DO BANCO AO INICIAR
-  fetchPortfolio(); // <--- Adicione essa linha no começo
+  // Carregar dados do Banco ao entrar na tela
+  useEffect(() => {
+    fetchPortfolio(); // <--- Busca os dados do Supabase
 
-  const storedDate = YieldService.getLastUpdate();
-  // ... resto do código igual ...
+    const storedDate = YieldService.getLastUpdate();
     if (storedDate) {
       setLastUpdateDate(new Date(storedDate));
     }
@@ -37,7 +43,7 @@ const Carteira = () => {
     if (shouldRefresh && portfolio.length > 0) {
       handleRefreshYields();
     }
-  }, []);
+  }, []); // Executa apenas uma vez ao montar o componente
 
   // --- CÁLCULO AUTOMÁTICO DO YIELD MÉDIO DA CARTEIRA ---
   const averageYield = useMemo(() => {
@@ -63,15 +69,15 @@ const Carteira = () => {
     setIsModalOpen(true);
   };
   
-  const handleSaveFII = (fiiData) => {
+  const handleSaveFII = async (fiiData) => {
     if (editingFII) {
-      updateFII(editingFII.id, fiiData);
+      await updateFII(editingFII.id, fiiData);
        toast({
         title: 'Sucesso',
         description: `${fiiData.ticker} atualizado na carteira.`
       });
     } else {
-      addFII(fiiData);
+      await addFII(fiiData);
        toast({
         title: 'Sucesso',
         description: `${fiiData.ticker} adicionado à carteira.`
@@ -79,8 +85,8 @@ const Carteira = () => {
     }
   };
   
-  const handleRemoveFII = (id) => {
-    removeFII(id);
+  const handleRemoveFII = async (id) => {
+    await removeFII(id);
     toast({
       title: 'Sucesso',
       description: 'FII removido da carteira'
@@ -96,7 +102,6 @@ const Carteira = () => {
 
     setIsUpdating(true);
     try {
-      // O YieldService vai usar o getFiiQuote que acabamos de atualizar
       const updates = await YieldService.updatePortfolioYields(portfolio);
       
       if (updates.length > 0) {
@@ -186,7 +191,7 @@ const Carteira = () => {
           </div>
         </div>
         
-        {/* Grid de Métricas com NOVO Card de Yield */}
+        {/* Grid de Métricas */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Total Investido</p>
@@ -201,8 +206,8 @@ const Carteira = () => {
             <div className="flex items-center">
                 <Percent className="h-5 w-5 text-blue-500 mr-2" />
                 <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-{/* Se o número for pequeno (ex: 0.12), multiplica por 100. Se já for grande (12), mostra direto */}
-{(averageYield > 1 ? averageYield : averageYield * 100).toFixed(2)}%                </p>
+                  {(averageYield > 1 ? averageYield : averageYield * 100).toFixed(2)}%
+                </p>
             </div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
@@ -213,7 +218,10 @@ const Carteira = () => {
           </div>
         </div>
         
-        {portfolio.length > 0 ? (
+        {/* Loading State ou Conteúdo */}
+        {isLoading ? (
+          <div className="text-center py-8 text-gray-500">Carregando carteira...</div>
+        ) : portfolio.length > 0 ? (
           viewMode === 'table' ? (
             <CarteiraTable
               portfolio={portfolio}
