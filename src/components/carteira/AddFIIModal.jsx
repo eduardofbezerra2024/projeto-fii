@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { searchFii, getFiiQuote } from '@/services/fiiService';
+import { getFiiQuote } from '@/services/fiiService'; // Apenas a busca de cotação já resolve
 import { toast } from '@/components/ui/use-toast';
 
 const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
@@ -15,15 +15,16 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
   const [searchError, setSearchError] = useState('');
   const [fiiData, setFiiData] = useState(null);
 
+  // Limpa ou preenche ao abrir
   useEffect(() => {
     if (editingFII) {
       setTicker(editingFII.ticker);
       setQuantity(editingFII.quantity);
       setPrice(editingFII.price);
+      // Se tiver dados extras salvos, mostra, senão deixa quieto
       setFiiData({
         name: editingFII.name || '',
         sector: editingFII.sector || '',
-        currentPrice: editingFII.currentPrice || 0
       });
     } else {
       resetForm();
@@ -38,14 +39,21 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     setSearchError('');
   };
 
-  const handleSearchTicker = async () => {
-    if (!ticker || ticker.length < 4) return;
+  // A MÁGICA DA BUSCA 🧙‍♂️
+  const handleSearchTicker = async (e) => {
+    if(e) e.preventDefault(); // Evita recarregar se vier de um Enter
+    
+    if (!ticker || ticker.length < 4) {
+      setSearchError('Digite um código válido (ex: MXRF11)');
+      return;
+    }
     
     setIsSearching(true);
     setSearchError('');
     setFiiData(null);
 
     try {
+      // Busca dados atualizados
       const quote = await getFiiQuote(ticker.toUpperCase());
       
       if (quote) {
@@ -54,25 +62,28 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
           sector: quote.sector,
           currentPrice: quote.price
         });
-        // Se for inclusão nova, sugere o preço atual como preço médio
-        if (!editingFII) {
+        
+        // AUTO-PREENCHIMENTO: Se não estivermos editando (ou se o preço estiver vazio), preenche sozinho
+        if (!editingFII || !price) {
           setPrice(quote.price);
+          toast({ description: `Preço atual de R$ ${quote.price} encontrado!` });
         }
       } else {
-        setSearchError('Fundo não encontrado. Verifique o código.');
+        setSearchError('Fundo não encontrado na B3.');
       }
     } catch (error) {
-      setSearchError('Erro ao buscar informações do fundo.');
+      setSearchError('Erro ao buscar. Verifique sua conexão.');
     } finally {
       setIsSearching(false);
     }
   };
 
   const handleSave = () => {
+    // Validação básica para não quebrar o banco
     if (!ticker || !quantity || !price) {
       toast({
-        title: "Campos obrigatórios",
-        description: "Preencha Ticker, Quantidade e Preço Médio.",
+        title: "Faltam dados",
+        description: "Por favor, preencha o Ticker, a Quantidade e o Preço.",
         variant: "destructive"
       });
       return;
@@ -81,10 +92,9 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     const fiiToSave = {
       ticker: ticker.toUpperCase(),
       quantity: Number(quantity),
-      price: Number(price), // Garante que seja número
-      sector: fiiData?.sector || 'Fundo Imobiliário',
-      name: fiiData?.name || ticker.toUpperCase(),
-      currentPrice: fiiData?.currentPrice || Number(price)
+      price: Number(price), // Garante que vai como número
+      sector: fiiData?.sector || 'Fundo Imobiliário', // Usa o setor que achamos na busca
+      name: fiiData?.name || ticker.toUpperCase()
     };
 
     onSave(fiiToSave);
@@ -95,12 +105,13 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{editingFII ? 'Editar FII' : 'Adicionar FII'}</DialogTitle>
+          <DialogTitle>{editingFII ? 'Editar FII' : 'Adicionar à Carteira'}</DialogTitle>
         </DialogHeader>
         
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-6 py-4">
+          {/* Campo de Busca Inteligente */}
           <div className="grid gap-2">
-            <Label htmlFor="ticker">Ticker (Código)</Label>
+            <Label htmlFor="ticker">Qual FII você comprou?</Label>
             <div className="flex gap-2">
               <Input
                 id="ticker"
@@ -108,26 +119,37 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
                 placeholder="Ex: MXRF11"
                 disabled={!!editingFII}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearchTicker(e)} // Busca ao dar Enter
               />
               {!editingFII && (
-                <Button type="button" size="icon" onClick={handleSearchTicker} disabled={isSearching}>
+                <Button 
+                  type="button" 
+                  onClick={handleSearchTicker} 
+                  disabled={isSearching}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
                   {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 </Button>
               )}
             </div>
-            {searchError && <p className="text-sm text-red-500">{searchError}</p>}
+            
+            {/* Resultado da Busca (Feedback Visual) */}
+            {searchError && <p className="text-sm text-red-500 font-medium">{searchError}</p>}
+            
             {fiiData && (
-              <div className="text-xs text-muted-foreground">
-                <p>{fiiData.name}</p>
-                <p>Setor: {fiiData.sector}</p>
-                <p>Preço Atual: R$ {fiiData.currentPrice}</p>
+              <div className="bg-slate-50 p-3 rounded-md border border-slate-100 text-sm">
+                <p className="font-bold text-slate-700">{fiiData.name}</p>
+                <div className="flex gap-2 text-slate-500 mt-1">
+                    <span>🏢 {fiiData.sector}</span>
+                    <span>💰 Cotação: R$ {fiiData.currentPrice}</span>
+                </div>
               </div>
             )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="quantity">Quantidade</Label>
+              <Label htmlFor="quantity">Quantas cotas?</Label>
               <Input
                 id="quantity"
                 type="number"
@@ -146,13 +168,16 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 onChange={(e) => setPrice(e.target.value)}
                 placeholder="0.00"
               />
+              <p className="text-[10px] text-gray-500">O valor que você pagou por cota.</p>
             </div>
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700">Salvar</Button>
+          <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
+            {editingFII ? 'Salvar Alterações' : 'Adicionar Ativo'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -160,5 +185,3 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
 };
 
 export default AddFIIModal;
-
- // Corrigindo modal de adicionar
