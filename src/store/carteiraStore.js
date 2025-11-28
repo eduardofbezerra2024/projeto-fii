@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { PortfolioService } from '@/services/PortfolioService';
-
+import { PortfolioService } from '@/services/UserPortfolioService';
 // Função auxiliar de cálculo
 const calculateMetrics = (portfolio) => {
   const totalInvested = portfolio.reduce((acc, fii) => acc + (Number(fii.price) * Number(fii.quantity)), 0);
