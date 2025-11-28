@@ -117,3 +117,5 @@ const useCarteiraStore = create((set, get) => ({
 }));
 
 export default useCarteiraStore;
+
+// Forçando atualização do Git - Versão Final
