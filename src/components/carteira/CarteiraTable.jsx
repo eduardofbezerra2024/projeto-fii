@@ -1,78 +1,87 @@
 import React from 'react';
 import { Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { formatCurrency, formatPercent } from '@/utils/formatters';
-import { calculateTotalValue, calculateProfitLoss, calculateProfitLossPercent } from '@/utils/calculations';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { formatCurrency } from '@/utils/formatters';
 
 const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-50 dark:bg-gray-700">
-            <tr>
-              <th className="text-left py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-300">FII</th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-300">Quantidade</th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-300">Preço Médio</th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-300">Preço Atual</th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-300">Valor Total</th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-300">Lucro/Prejuízo</th>
-              <th className="text-right py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-300">Yield</th>
-              <th className="text-center py-3 px-4 text-sm font-medium text-gray-600 dark:text-gray-300">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {portfolio.map((item) => {
-              const totalValue = calculateTotalValue(item.quantity, item.currentPrice);
-              const profitLoss = calculateProfitLoss(item.quantity, item.avgPrice, item.currentPrice);
-              const profitLossPercent = calculateProfitLossPercent(item.avgPrice, item.currentPrice);
-              const isPositive = profitLoss >= 0;
-              
-              return (
-                <tr key={item.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                  <td className="py-3 px-4">
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{item.ticker}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{item.sector}</p>
-                    </div>
-                  </td>
-                  <td className="text-right py-3 px-4 text-gray-900 dark:text-white">{item.quantity}</td>
-                  <td className="text-right py-3 px-4 text-gray-900 dark:text-white">{formatCurrency(item.avgPrice)}</td>
-                  <td className="text-right py-3 px-4 text-gray-900 dark:text-white">{formatCurrency(item.currentPrice)}</td>
-                  <td className="text-right py-3 px-4 font-medium text-gray-900 dark:text-white">{formatCurrency(totalValue)}</td>
-                  <td className="text-right py-3 px-4">
-                    <div className={isPositive ? 'text-green-600' : 'text-red-600'}>
-                      <div>{formatCurrency(Math.abs(profitLoss))}</div>
-                      <div className="text-sm">({formatPercent(Math.abs(profitLossPercent))})</div>
-                    </div>
-                  </td>
-                  <td className="text-right py-3 px-4 text-green-600 dark:text-green-400 font-medium">
-                    {formatPercent(item.dividendYield)}
-                  </td>
-                  <td className="text-center py-3 px-4">
-                    <div className="flex items-center justify-center space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onEdit(item)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onRemove(item.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>FII</TableHead>
+            <TableHead className="text-center">Quantidade</TableHead>
+            <TableHead className="text-right">Preço Médio</TableHead>
+            <TableHead className="text-right">Preço Atual</TableHead>
+            <TableHead className="text-right">Valor Total</TableHead>
+            <TableHead className="text-right">Lucro/Prejuízo</TableHead>
+            <TableHead className="text-right">Yield (12m)</TableHead>
+            <TableHead className="text-right">Ações</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {portfolio.map((fii) => {
+            // BLINDAGEM CONTRA NaN:
+            // Garante que os valores sejam números. Se falhar, usa 0.
+            const quantity = Number(fii.quantity) || 0;
+            const avgPrice = Number(fii.price) || 0;
+            const currentPrice = Number(fii.currentPrice) || avgPrice; // Se não tiver preço atual, usa o médio
+            
+            const totalValue = currentPrice * quantity;
+            const profit = (currentPrice - avgPrice) * quantity;
+            
+            // Evita divisão por zero no cálculo da porcentagem
+            const profitPercent = avgPrice > 0 ? (profit / (avgPrice * quantity)) * 100 : 0;
+
+            const yieldVal = Number(fii.dividendYield) || 0;
+
+            return (
+              <TableRow key={fii.id}>
+                <TableCell>
+                  <div>
+                    <p className="font-bold text-gray-900 dark:text-white">{fii.ticker}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{fii.sector || 'Fundo Imobiliário'}</p>
+                  </div>
+                </TableCell>
+                <TableCell className="text-center">{quantity}</TableCell>
+                <TableCell className="text-right">{formatCurrency(avgPrice)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(currentPrice)}</TableCell>
+                <TableCell className="text-right font-medium">{formatCurrency(totalValue)}</TableCell>
+                
+                <TableCell className="text-right">
+                  <div className={`flex flex-col items-end ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <span className="font-bold">{formatCurrency(profit)}</span>
+                    <span className="text-xs">({profitPercent.toFixed(2)}%)</span>
+                  </div>
+                </TableCell>
+
+                <TableCell className="text-right font-bold text-blue-600 dark:text-blue-400">
+                  {yieldVal.toFixed(2)}%
+                </TableCell>
+
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" size="icon" onClick={() => onEdit(fii)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => onRemove(fii.id)} className="text-red-500 hover:text-red-600 hover:bg-red-50">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 };
