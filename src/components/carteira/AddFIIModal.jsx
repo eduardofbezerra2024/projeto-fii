@@ -1,35 +1,29 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import React, { useState, useEffect } from 'react';
+import { X, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { getFiiQuote, searchFii } from '@/services/fiiService';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { searchFii, getFiiQuote } from '@/services/fiiService';
 import { toast } from '@/components/ui/use-toast';
-import { debounce } from 'lodash';
 
 const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
-  const [fiiData, setFiiData] = useState({
-    ticker: '',
-    name: '',
-    quantity: '',
-    avgPrice: '',
-    currentPrice: '',
-    dividendYield: '',
-    sector: ''
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [tickerError, setTickerError] = useState('');
+  const [ticker, setTicker] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [price, setPrice] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [fiiData, setFiiData] = useState(null);
 
   useEffect(() => {
     if (editingFII) {
+      setTicker(editingFII.ticker);
+      setQuantity(editingFII.quantity);
+      setPrice(editingFII.price);
       setFiiData({
-        ticker: editingFII.ticker,
-        name: editingFII.name,
-        quantity: editingFII.quantity,
-        avgPrice: editingFII.avgPrice,
-        currentPrice: editingFII.currentPrice,
-        dividendYield: editingFII.dividendYield || '',
-        sector: editingFII.sector
+        name: editingFII.name || '',
+        sector: editingFII.sector || '',
+        currentPrice: editingFII.currentPrice || 0
       });
     } else {
       resetForm();
@@ -37,154 +31,134 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
   }, [editingFII, isOpen]);
 
   const resetForm = () => {
-    setFiiData({
-      ticker: '',
-      name: '',
-      quantity: '',
-      avgPrice: '',
-      currentPrice: '',
-      dividendYield: '',
-      sector: ''
-    });
-    setTickerError('');
-    setIsLoading(false);
+    setTicker('');
+    setQuantity('');
+    setPrice('');
+    setFiiData(null);
+    setSearchError('');
   };
 
-  const handleClose = () => {
-    resetForm();
-    onClose();
-  };
+  const handleSearchTicker = async () => {
+    if (!ticker || ticker.length < 4) return;
+    
+    setIsSearching(true);
+    setSearchError('');
+    setFiiData(null);
 
-  const fetchFiiData = async (ticker) => {
-    if (ticker.length < 5) return;
-    setIsLoading(true);
-    setTickerError('');
     try {
-      const quote = await getFiiQuote(ticker);
+      const quote = await getFiiQuote(ticker.toUpperCase());
+      
       if (quote) {
-        setFiiData(prev => ({
-          ...prev,
+        setFiiData({
           name: quote.name,
-          currentPrice: quote.price,
-          dividendYield: quote.dividendYield === null ? '' : quote.dividendYield,
-          sector: quote.sector
-        }));
+          sector: quote.sector,
+          currentPrice: quote.price
+        });
+        // Se for inclusão nova, sugere o preço atual como preço médio
+        if (!editingFII) {
+          setPrice(quote.price);
+        }
       } else {
-        setTickerError('Ticker não encontrado ou inválido.');
-        setFiiData(prev => ({ ...prev, name: '', currentPrice: '', dividendYield: '', sector: '' }));
+        setSearchError('Fundo não encontrado. Verifique o código.');
       }
     } catch (error) {
-      setTickerError('Erro ao buscar dados do FII.');
+      setSearchError('Erro ao buscar informações do fundo.');
     } finally {
-      setIsLoading(false);
+      setIsSearching(false);
     }
   };
 
-  const debouncedFetch = useCallback(debounce(fetchFiiData, 500), []);
-
-  const handleTickerChange = (e) => {
-    const newTicker = e.target.value.toUpperCase();
-    setFiiData(prev => ({ ...prev, ticker: newTicker }));
-    if (newTicker && !editingFII) {
-      debouncedFetch(newTicker);
-    }
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFiiData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!fiiData.ticker || !fiiData.quantity || !fiiData.avgPrice) {
+  const handleSave = () => {
+    if (!ticker || !quantity || !price) {
       toast({
-        title: 'Erro de Validação',
-        description: 'Por favor, preencha Ticker, Quantidade e Preço Médio.',
-        variant: 'destructive',
+        title: "Campos obrigatórios",
+        description: "Preencha Ticker, Quantidade e Preço Médio.",
+        variant: "destructive"
       });
       return;
     }
 
-    const dataToSave = {
-      ...fiiData,
-      quantity: parseFloat(fiiData.quantity),
-      avgPrice: parseFloat(fiiData.avgPrice),
-      dividendYield: fiiData.dividendYield === '' ? 0 : parseFloat(fiiData.dividendYield),
+    const fiiToSave = {
+      ticker: ticker.toUpperCase(),
+      quantity: Number(quantity),
+      price: Number(price), // Garante que seja número
+      sector: fiiData?.sector || 'Fundo Imobiliário',
+      name: fiiData?.name || ticker.toUpperCase(),
+      currentPrice: fiiData?.currentPrice || Number(price)
     };
 
-    onSave(dataToSave);
-    handleClose();
+    onSave(fiiToSave);
+    onClose();
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[425px] bg-white dark:bg-gray-800">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="text-gray-900 dark:text-white">{editingFII ? 'Editar FII' : 'Adicionar FII'}</DialogTitle>
+          <DialogTitle>{editingFII ? 'Editar FII' : 'Adicionar FII'}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="ticker" className="text-right text-gray-600 dark:text-gray-300">Ticker</Label>
-              <div className="col-span-3">
-                <Input id="ticker" name="ticker" value={fiiData.ticker} onChange={handleTickerChange} className="dark:bg-gray-700 dark:text-white" disabled={!!editingFII} />
-                {tickerError && <p className="text-red-500 text-sm mt-1">{tickerError}</p>}
+        
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="ticker">Ticker (Código)</Label>
+            <div className="flex gap-2">
+              <Input
+                id="ticker"
+                value={ticker}
+                onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                placeholder="Ex: MXRF11"
+                disabled={!!editingFII}
+              />
+              {!editingFII && (
+                <Button type="button" size="icon" onClick={handleSearchTicker} disabled={isSearching}>
+                  {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
+              )}
+            </div>
+            {searchError && <p className="text-sm text-red-500">{searchError}</p>}
+            {fiiData && (
+              <div className="text-xs text-muted-foreground">
+                <p>{fiiData.name}</p>
+                <p>Setor: {fiiData.sector}</p>
+                <p>Preço Atual: R$ {fiiData.currentPrice}</p>
               </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="quantity">Quantidade</Label>
+              <Input
+                id="quantity"
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="0"
+              />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right text-gray-600 dark:text-gray-300">Nome</Label>
-              <Input id="name" name="name" value={fiiData.name} className="col-span-3 dark:bg-gray-700 dark:text-white" disabled />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="quantity" className="text-right text-gray-600 dark:text-gray-300">Quantidade</Label>
-              <Input id="quantity" name="quantity" type="number" value={fiiData.quantity} onChange={handleChange} className="col-span-3 dark:bg-gray-700 dark:text-white" />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="avgPrice" className="text-right text-gray-600 dark:text-gray-300">Preço Médio</Label>
-              <Input id="avgPrice" name="avgPrice" type="number" step="0.01" value={fiiData.avgPrice} onChange={handleChange} className="col-span-3 dark:bg-gray-700 dark:text-white" />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="currentPrice" className="text-right text-gray-600 dark:text-gray-300">Preço Atual</Label>
-              <Input id="currentPrice" name="currentPrice" value={fiiData.currentPrice} className="col-span-3 dark:bg-gray-700 dark:text-white" disabled />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="dividendYield" className="text-right text-gray-600 dark:text-gray-300">Dividend Yield (%)</Label>
-              <Input id="dividendYield" name="dividendYield" type="number" step="0.01" value={fiiData.dividendYield} onChange={handleChange} placeholder="Ex: 8.5" className="col-span-3 dark:bg-gray-700 dark:text-white" />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="sector" className="text-right text-gray-600 dark:text-gray-300">Setor</Label>
-              <Input id="sector" name="sector" value={fiiData.sector} className="col-span-3 dark:bg-gray-700 dark:text-white" disabled />
+            <div className="grid gap-2">
+              <Label htmlFor="price">Preço Médio (R$)</Label>
+              <Input
+                id="price"
+                type="number"
+                step="0.01"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="0.00"
+              />
             </div>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={handleClose}>Cancelar</Button>
-            <Button type="submit" className="bg-green-600 hover:bg-green-700" disabled={isLoading || !!tickerError}>
-              {isLoading ? 'Buscando...' : (editingFII ? 'Salvar Alterações' : 'Adicionar')}
-            </Button>
-          </DialogFooter>
-        </form>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700">Salvar</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
 
-// Add lodash debounce to the window object if it's not there
-if (typeof window.debounce === 'undefined') {
-    window.debounce = (func, wait, immediate) => {
-        let timeout;
-        return function() {
-            const context = this, args = arguments;
-            const later = function() {
-                timeout = null;
-                if (!immediate) func.apply(context, args);
-            };
-            const callNow = immediate && !timeout;
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-            if (callNow) func.apply(context, args);
-        };
-    };
-}
-
 export default AddFIIModal;
+
+ // Corrigindo modal de adicionar
