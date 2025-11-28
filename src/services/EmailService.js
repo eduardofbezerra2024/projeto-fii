@@ -1,9 +1,9 @@
 import { supabase } from '@/lib/customSupabaseClient';
 
-// --- SUAS CHAVES DO EMAILJS ---
-const SERVICE_ID = 'service_94dm74b';          // ✅ Esse já está certo
-const TEMPLATE_ID = 'template_76778mi';        // <--- Cole o ID do Template aqui (sem espaços)
-const PUBLIC_KEY = 'user_XyZ123abc...';        // <--- Cole a Public Key aqui
+// --- SUAS CHAVES DO EMAILJS (PREENCHIDAS) ---
+const SERVICE_ID = 'service_94dm74b';
+const TEMPLATE_ID = 'template_qjihfb6';
+const PUBLIC_KEY = 'PUsKtufGJ33O7jY0w';  // ✅ Sua chave pública aqui
 
 export const EmailService = {
   /**
