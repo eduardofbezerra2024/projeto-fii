@@ -14,15 +14,20 @@ import useCarteiraStore from '@/store/carteiraStore';
 const Carteira = () => {
   const { portfolio, metrics, addFII, updateFII, removeFII } = useCarteira();
   const { updateYields } = useCarteiraStore();
-  const [isModalOpen, setIsModalOpen] = useState(false);
+// Adicione o fetchPortfolio aqui embaixo:
+  const { fetchPortfolio, isLoading } = useCarteiraStore(); // <--- Mude essa linha  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFII, setEditingFII] = useState(null);
   const [viewMode, setViewMode] = useState('table');
   const [isUpdating, setIsUpdating] = useState(false);
   const [lastUpdateDate, setLastUpdateDate] = useState(null);
 
   // Load last update time on mount
-  useEffect(() => {
-    const storedDate = YieldService.getLastUpdate();
+ useEffect(() => {
+  // CARREGAR DADOS DO BANCO AO INICIAR
+  fetchPortfolio(); // <--- Adicione essa linha no começo
+
+  const storedDate = YieldService.getLastUpdate();
+  // ... resto do código igual ...
     if (storedDate) {
       setLastUpdateDate(new Date(storedDate));
     }
