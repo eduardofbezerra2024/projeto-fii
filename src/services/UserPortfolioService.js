@@ -18,7 +18,7 @@ export const PortfolioService = {
     return data;
   },
 
-  // Adicionar ativo
+ // Adicionar ativo
   async addAsset(asset) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuário não logado');
@@ -30,7 +30,8 @@ export const PortfolioService = {
         ticker: asset.ticker,
         quantity: asset.quantity,
         price: asset.price,
-        sector: asset.sector
+        sector: asset.sector,
+        purchase_date: asset.purchaseDate // <--- NOVIDADE AQUI
       })
       .select()
       .single();
