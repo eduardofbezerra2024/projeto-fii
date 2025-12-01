@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
-import { Search, Trash2, History, TrendingUp, DollarSign, BarChart3, Activity } from 'lucide-react';
+// ADICIONEI O 'RefreshCw' AQUI NA LISTA:
+import { Search, Trash2, History, TrendingUp, DollarSign, BarChart3, Activity, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getFiiQuote } from '@/services/fiiService'; // Seu serviço existente
+import { getFiiQuote } from '@/services/fiiService';
 import { toast } from '@/components/ui/use-toast';
 
 const Analise = () => {
@@ -24,7 +25,6 @@ const Analise = () => {
   // 2. Função para Salvar no Histórico
   const addToHistory = (newTicker) => {
     const upperTicker = newTicker.toUpperCase();
-    // Cria nova lista: coloca o atual no começo, remove duplicatas, limita a 5 itens
     const newHistory = [upperTicker, ...history.filter(t => t !== upperTicker)].slice(0, 5);
     
     setHistory(newHistory);
@@ -48,7 +48,7 @@ const Analise = () => {
       
       if (data) {
         setFiiData(data);
-        addToHistory(ticker); // <--- Salva no histórico se deu certo
+        addToHistory(ticker);
       } else {
         toast({ variant: "destructive", title: "Não encontrado", description: "Verifique o código do FII." });
       }
@@ -60,11 +60,8 @@ const Analise = () => {
     }
   };
 
-  // Função para quando clicar num botão do histórico
   const handleHistoryClick = (histTicker) => {
     setTicker(histTicker);
-    // Dispara a busca manual para esse ticker
-    // Precisamos chamar a busca diretamente aqui
     searchDirectly(histTicker);
   };
 
@@ -105,7 +102,7 @@ const Analise = () => {
             </Button>
           </form>
 
-          {/* Área do Histórico (Substitui os botões fixos) */}
+          {/* Histórico */}
           {history.length > 0 && (
             <div className="mt-4 flex items-center gap-2 flex-wrap">
               <span className="text-xs text-gray-500 flex items-center gap-1">
@@ -135,10 +132,9 @@ const Analise = () => {
           )}
         </div>
 
-        {/* Resultados da Análise */}
+        {/* Resultados */}
         {fiiData && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Cabeçalho do Fundo */}
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-4xl font-bold text-gray-900 dark:text-white">{fiiData.name?.split(' ')[0] || ticker}</h2>
@@ -148,11 +144,9 @@ const Analise = () => {
                 <p className="text-3xl font-bold text-gray-900 dark:text-white">
                   R$ {fiiData.price?.toFixed(2)}
                 </p>
-                {/* Aqui você pode adicionar variação se a API fornecer futuramente */}
               </div>
             </div>
 
-            {/* Cards de Indicadores */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <Card>
                 <CardHeader className="pb-2">
@@ -192,7 +186,6 @@ const Analise = () => {
               </Card>
             </div>
 
-            {/* Detalhes Extras */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                <Card className="bg-green-50 dark:bg-green-900/10 border-green-100 dark:border-green-900/30">
                  <CardContent className="pt-6 flex items-center gap-4">
