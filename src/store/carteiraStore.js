@@ -40,26 +40,16 @@ const useCarteiraStore = create((set, get) => ({
     }
   },
 
-  addFII: async (fii) => {
+ addFII: async (fii) => {
     try {
-      const savedFii = await PortfolioService.addAsset(fii);
-      const currentPortfolio = get().portfolio;
-      // Garante números
-      const newFii = { 
-          ...savedFii, 
-          price: Number(savedFii.price),
-          quantity: Number(savedFii.quantity),
-          currentPrice: Number(savedFii.price), 
-          dividendYield: 0 
-      };
+      // Agora chamamos addTransaction (que calcula o preço médio)
+      const savedFii = await PortfolioService.addTransaction(fii);
       
-      const newPortfolio = [...currentPortfolio, newFii];
-      set({ 
-        portfolio: newPortfolio,
-        metrics: calculateMetrics(newPortfolio)
-      });
+      // Recarrega tudo do banco para garantir que a tela mostre a média certa
+      get().fetchPortfolio(); 
+      
     } catch (error) {
-      console.error("Erro ao salvar:", error);
+      console.error("Erro ao salvar transação:", error);
     }
   },
 

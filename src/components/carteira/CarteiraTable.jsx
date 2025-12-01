@@ -63,6 +63,21 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
                         </div>
                     )}
                   </div>
+
+{/* Botão de Histórico */}
+<Button 
+  variant="ghost" 
+  size="icon" 
+  title="Ver Histórico de Compras"
+  onClick={() => {
+     // Por enquanto, vamos só imprimir no console ou fazer um alerta simples
+     // Num próximo passo podemos criar um Modal lindo para isso
+     alert(`Histórico de ${fii.ticker} será implementado em breve!`);
+  }}
+>
+  <History className="h-4 w-4 text-blue-500" />
+</Button>
+
                 </TableCell>
                 <TableCell className="text-center">{quantity}</TableCell>
                 <TableCell className="text-right">{formatCurrency(avgPrice)}</TableCell>
