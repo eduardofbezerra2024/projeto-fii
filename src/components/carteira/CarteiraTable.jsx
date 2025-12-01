@@ -1,6 +1,6 @@
 import React from 'react';
-import { Edit, Trash2, CalendarDays, History } from 'lucide-react'; // <--- Adicione History
-// import { Button } from '@/components/ui/button';
+import { Edit, Trash2, CalendarDays, Clock } from 'lucide-react'; // Usando Clock no lugar de History por segurança
+import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/utils/formatters';
 
@@ -63,21 +63,6 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
                         </div>
                     )}
                   </div>
-
-{/* Botão de Histórico */}
-<Button 
-  variant="ghost" 
-  size="icon" 
-  title="Ver Histórico de Compras"
-  onClick={() => {
-     // Por enquanto, vamos só imprimir no console ou fazer um alerta simples
-     // Num próximo passo podemos criar um Modal lindo para isso
-     alert(`Histórico de ${fii.ticker} será implementado em breve!`);
-  }}
->
-  <History className="h-4 w-4 text-blue-500" />
-</Button>
-
                 </TableCell>
                 <TableCell className="text-center">{quantity}</TableCell>
                 <TableCell className="text-right">{formatCurrency(avgPrice)}</TableCell>
@@ -99,6 +84,16 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
 
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
+                    {/* BOTÃO DE HISTÓRICO (Agora no lugar certo!) */}
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      title="Ver Histórico"
+                      onClick={() => alert(`Histórico de ${fii.ticker} em breve!`)}
+                    >
+                      <Clock className="h-4 w-4 text-blue-500" />
+                    </Button>
+
                     <Button variant="ghost" size="icon" onClick={() => onEdit(fii)}>
                       <Edit className="h-4 w-4" />
                     </Button>
