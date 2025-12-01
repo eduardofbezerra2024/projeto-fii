@@ -1,6 +1,6 @@
 import React from 'react';
-import { Edit, Trash2, CalendarDays } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Edit, Trash2, CalendarDays, History } from 'lucide-react'; // <--- Adicione History
+// import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/utils/formatters';
 
