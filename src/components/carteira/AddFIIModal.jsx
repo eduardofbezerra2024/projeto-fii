@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { getFiiQuote } from '@/services/fiiService';
 import { toast } from '@/components/ui/use-toast';
 
 const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
@@ -11,10 +12,12 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
   const [purchaseDate, setPurchaseDate] = useState('');
+  // 1. ESTADO NOVO PARA O DIVIDENDO
   const [lastDividend, setLastDividend] = useState('');
   const [fiiType, setFiiType] = useState('Tijolo'); 
   
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const [fiiData, setFiiData] = useState(null);
 
   useEffect(() => {
@@ -23,7 +26,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
       setQuantity(editingFII.quantity);
       setPrice(editingFII.price);
       setPurchaseDate(editingFII.purchase_date || '');
-      setLastDividend(editingFII.last_dividend || '');
+      setLastDividend(editingFII.last_dividend || ''); // Carrega o valor salvo
       setFiiType(editingFII.fii_type || 'Tijolo');
       setFiiData({
         name: editingFII.name || '',
@@ -42,50 +45,59 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     setFiiType('Tijolo');
     setPurchaseDate(new Date().toISOString().split('T')[0]);
     setFiiData(null);
+    setSearchError('');
   };
 
-  // --- BUSCA INTELIGENTE (STATUS INVEST) ---
   const handleSearchTicker = async () => {
     if (!ticker || ticker.length < 4) return;
     if (isSearching) return;
 
     setIsSearching(true);
+    setSearchError('');
     setFiiData(null);
 
     try {
-      // Chama a nossa API de raspagem do Status Invest
-      const response = await fetch(`/api/statusinvest?ticker=${ticker}`);
-      const data = await response.json();
+      // 1. Busca Preço (Brapi)
+      const quote = await getFiiQuote(ticker.toUpperCase());
+      
+      // 2. Tenta buscar Dividendo (API Local/Scraper)
+      // Se você não criou a api/dividend.js, isso vai falhar silenciosamente e deixar o campo vazio
+      let scrapedDividend = 0;
+      try {
+        const response = await fetch(`/api/dividend?ticker=${ticker}`);
+        if (response.ok) {
+            const data = await response.json();
+            if (data.dividend) scrapedDividend = data.dividend;
+        }
+      } catch (err) {
+        // Ignora erro de busca de dividendo
+      }
 
-      if (data.price) {
+      if (quote) {
         setFiiData({
-          name: ticker.toUpperCase(),
-          sector: 'Fundo Imobiliário', // StatusInvest não manda setor fácil, mantemos padrão
-          currentPrice: data.price
+          name: quote.name,
+          sector: quote.sector,
+          currentPrice: quote.price
         });
         
-        // 1. Preenche o Preço (se estiver vazio ou editando)
+        // Auto-preenche Preço
         if (!price || !editingFII) {
-          setPrice(data.price);
+          setPrice(quote.price);
         }
 
-        // 2. Preenche o Dividendo (se achou e estiver vazio)
-        if (data.lastDividend > 0 && (!lastDividend || !editingFII)) {
-            setLastDividend(data.lastDividend);
+        // Auto-preenche Dividendo se achou
+        if (scrapedDividend > 0 && (!lastDividend || !editingFII)) {
+            setLastDividend(scrapedDividend);
+            toast({ description: `Preço: R$ ${quote.price} | Dividendo: R$ ${scrapedDividend}` });
+        } else {
+            toast({ description: `Preço atual: R$ ${quote.price}` });
         }
-
-        // Feedback visual com dados extras
-        toast({ 
-            title: "Dados encontrados!", 
-            description: `Preço: R$ ${data.price} | P/VP: ${data.pvp} | DY: ${data.dy}%` 
-        });
 
       } else {
-        toast({ variant: "destructive", title: "Fundo não encontrado." });
+        setSearchError('Fundo não encontrado.');
       }
     } catch (error) {
       console.error(error);
-      toast({ variant: "destructive", title: "Erro na busca." });
     } finally {
       setIsSearching(false);
     }
@@ -102,6 +114,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
       quantity: Number(quantity),
       price: Number(price),
       purchaseDate: purchaseDate,
+      // 2. SALVA O DIVIDENDO
       lastDividend: Number(lastDividend) || 0,
       fiiType: fiiType,
       sector: fiiData?.sector || 'Fundo Imobiliário',
@@ -128,7 +141,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 id="ticker"
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                onBlur={handleSearchTicker} // Busca ao sair do campo
+                onBlur={handleSearchTicker}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearchTicker()}
                 placeholder="Ex: MXRF11"
                 disabled={!!editingFII}
@@ -141,6 +154,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
               )}
             </div>
             {fiiData && <p className="text-xs text-green-600 font-medium">✅ {fiiData.name}</p>}
+            {searchError && <p className="text-xs text-red-500">{searchError}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -154,7 +168,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
             </div>
             
-            {/* Campo de Dividendo */}
+            {/* 3. CAMPO DE DIVIDENDO NA TELA */}
             <div>
                 <Label className="text-blue-600 flex items-center justify-between">
                     Último Provento
