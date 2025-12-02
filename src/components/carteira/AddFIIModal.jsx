@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Loader2, Calendar } from 'lucide-react';
+import { Search, Loader2, Building2 } from 'lucide-react'; // Ícone novo
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,7 +11,11 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
   const [ticker, setTicker] = useState('');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState(''); // Estado da Data
+  const [purchaseDate, setPurchaseDate] = useState('');
+  const [lastDividend, setLastDividend] = useState('');
+  // NOVO ESTADO PARA O TIPO
+  const [fiiType, setFiiType] = useState('Tijolo'); 
+  
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
   const [fiiData, setFiiData] = useState(null);
@@ -21,7 +25,9 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
       setTicker(editingFII.ticker);
       setQuantity(editingFII.quantity);
       setPrice(editingFII.price);
-      setPurchaseDate(editingFII.purchase_date || ''); // Carrega a data se existir
+      setPurchaseDate(editingFII.purchase_date || '');
+      setLastDividend(editingFII.last_dividend || '');
+      setFiiType(editingFII.fii_type || 'Tijolo'); // Carrega o tipo salvo
       setFiiData({
         name: editingFII.name || '',
         sector: editingFII.sector || '',
@@ -35,7 +41,8 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     setTicker('');
     setQuantity('');
     setPrice('');
-    // Data padrão: Hoje (formato YYYY-MM-DD para o input)
+    setLastDividend('');
+    setFiiType('Tijolo'); // Padrão
     setPurchaseDate(new Date().toISOString().split('T')[0]);
     setFiiData(null);
     setSearchError('');
@@ -60,7 +67,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
         
         if (!price || !editingFII) {
           setPrice(quote.price);
-          toast({ title: "Preço encontrado!", description: `Cotação atual: R$ ${quote.price}` });
+          toast({ title: "Preço atual preenchido!" });
         }
       } else {
         setSearchError('Fundo não encontrado.');
@@ -82,7 +89,9 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
       ticker: ticker.toUpperCase(),
       quantity: Number(quantity),
       price: Number(price),
-      purchaseDate: purchaseDate, // Envia a data
+      purchaseDate: purchaseDate,
+      lastDividend: Number(lastDividend) || 0,
+      fiiType: fiiType, // Envia o tipo escolhido
       sector: fiiData?.sector || 'Fundo Imobiliário',
       name: fiiData?.name || ticker.toUpperCase()
     };
@@ -93,12 +102,13 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>{editingFII ? 'Editar Ativo' : 'Adicionar à Carteira'}</DialogTitle>
         </DialogHeader>
         
-        <div className="grid gap-6 py-4">
+        <div className="grid gap-4 py-4">
+          {/* Ticker e Busca */}
           <div className="grid gap-2">
             <Label htmlFor="ticker">Ticker</Label>
             <div className="flex gap-2">
@@ -107,7 +117,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
                 onBlur={handleSearchTicker}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearchTicker()}
                 placeholder="Ex: MXRF11"
                 disabled={!!editingFII}
                 className="uppercase"
@@ -119,41 +128,49 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
               )}
             </div>
             {fiiData && <p className="text-xs text-green-600 font-medium">✅ {fiiData.name}</p>}
-            {searchError && <p className="text-xs text-red-500">{searchError}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="quantity">Quantidade</Label>
-              <Input id="quantity" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="0" />
+            <div><Label>Quantidade</Label><Input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></div>
+            <div><Label>Preço Pago (R$)</Label><Input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+                <Label>Data Compra</Label>
+                <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
             </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="price">Preço Pago (R$)</Label>
-              <Input id="price" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" />
+            <div>
+                <Label className="text-blue-600">Último Provento</Label>
+                <Input type="number" step="0.01" value={lastDividend} onChange={(e) => setLastDividend(e.target.value)} placeholder="0.00" />
             </div>
           </div>
 
-          {/* CAMPO DE DATA NOVO */}
+          {/* NOVO CAMPO: TIPO DO ATIVO */}
           <div className="grid gap-2">
-            <Label htmlFor="date">Data da Compra</Label>
-            <div className="relative">
-                <Input 
-                    id="date" 
-                    type="date" 
-                    value={purchaseDate} 
-                    onChange={(e) => setPurchaseDate(e.target.value)} 
-                />
-            </div>
-            <p className="text-[10px] text-gray-500">Usaremos isso para calcular o tempo de rendimento.</p>
+            <Label htmlFor="type" className="flex items-center gap-1">
+                <Building2 className="h-3 w-3" /> Tipo do Fundo
+            </Label>
+            <select
+                id="type"
+                value={fiiType}
+                onChange={(e) => setFiiType(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                <option value="Tijolo">🧱 Tijolo (Imóveis Físicos)</option>
+                <option value="Papel">📄 Papel (CRIs/Dívidas)</option>
+                <option value="Hibrido">⚖️ Híbrido (Misto)</option>
+                <option value="Fiagro">🚜 Fiagro (Agronegócio)</option>
+                <option value="Infra">🏗️ Infra (Infraestrutura)</option>
+                <option value="Outros">❓ Outros</option>
+            </select>
           </div>
+
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700">
-            {editingFII ? 'Salvar' : 'Adicionar'}
-          </Button>
+          <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700">Salvar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

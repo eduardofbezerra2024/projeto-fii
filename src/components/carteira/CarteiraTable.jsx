@@ -3,10 +3,10 @@ import { Edit, Trash2, CalendarDays, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/utils/formatters';
-import HistoryModal from './HistoryModal'; // <--- IMPORT NOVO
+import HistoryModal from './HistoryModal';
 
 const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
-  // ESTADOS PARA O MODAL DE HISTÓRICO
+  // Estados para o Modal de Histórico
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState(null);
 
@@ -15,6 +15,7 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
     setHistoryOpen(true);
   };
 
+  // Função para calcular há quanto tempo tem o ativo
   const getTimeSince = (dateString) => {
     if (!dateString) return null;
     const date = new Date(dateString);
@@ -30,7 +31,7 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>FII / Data</TableHead>
+              <TableHead>FII / Detalhes</TableHead>
               <TableHead className="text-center">Qtd</TableHead>
               <TableHead className="text-right">Preço Médio</TableHead>
               <TableHead className="text-right">Preço Atual</TableHead>
@@ -42,30 +43,50 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
           </TableHeader>
           <TableBody>
             {portfolio.map((fii) => {
+              // Garantir que os valores sejam números para não quebrar a matemática
               const quantity = Number(fii.quantity) || 0;
               const avgPrice = Number(fii.price) || 0;
               const currentPrice = Number(fii.currentPrice) || avgPrice;
               const lastDividend = Number(fii.last_dividend) || 0;
               
+              // Cálculos Financeiros
               const profit = (currentPrice - avgPrice) * quantity;
               const profitPercent = avgPrice > 0 ? (profit / (avgPrice * quantity)) * 100 : 0;
               const monthlyIncome = lastDividend * quantity;
               const yieldOnCost = avgPrice > 0 ? (lastDividend / avgPrice) * 100 : 0;
+              
               const timeSince = getTimeSince(fii.purchase_date);
 
               return (
                 <TableRow key={fii.id}>
                   <TableCell>
-                    <div className="flex flex-col">
+                    <div className="flex flex-col gap-1">
                       <span className="font-bold text-gray-900 dark:text-white">{fii.ticker}</span>
+                      
+                      {/* Setor */}
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{fii.sector || 'Fundo Imobiliário'}</span>
+                      
+                      {/* NOVA ETIQUETA DE TIPO COLORIDA */}
+                      {fii.fii_type && fii.fii_type !== 'Indefinido' && (
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded w-fit font-medium
+                            ${fii.fii_type === 'Tijolo' ? 'bg-orange-100 text-orange-700' : 
+                              fii.fii_type === 'Papel' ? 'bg-blue-100 text-blue-700' : 
+                              fii.fii_type === 'Fiagro' ? 'bg-green-100 text-green-700' :
+                              'bg-gray-100 text-gray-700'}`}>
+                            {fii.fii_type}
+                        </span>
+                      )}
+
+                      {/* Tempo de Carteira */}
                       {timeSince && (
-                          <div className="flex items-center gap-1 mt-1 text-[10px] text-gray-500">
+                          <div className="flex items-center gap-1 text-[10px] text-gray-400 mt-1">
                               <CalendarDays className="h-3 w-3" />
                               <span>Há {timeSince}</span>
                           </div>
                       )}
                     </div>
                   </TableCell>
+                  
                   <TableCell className="text-center">{quantity}</TableCell>
                   <TableCell className="text-right">{formatCurrency(avgPrice)}</TableCell>
                   <TableCell className="text-right">{formatCurrency(currentPrice)}</TableCell>
@@ -92,18 +113,23 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
 
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      {/* BOTÃO HISTÓRICO ATUALIZADO */}
+                      {/* Botão de Histórico */}
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        title="Ver Histórico"
+                        title="Ver Histórico de Compras"
                         onClick={() => handleOpenHistory(fii.ticker)}
                       >
                         <Clock className="h-4 w-4 text-blue-500" />
                       </Button>
 
-                      <Button variant="ghost" size="icon" onClick={() => onEdit(fii)}><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => onRemove(fii.id)} className="text-red-500 hover:bg-red-50"><Trash2 className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => onEdit(fii)}>
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      
+                      <Button variant="ghost" size="icon" onClick={() => onRemove(fii.id)} className="text-red-500 hover:bg-red-50">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -113,7 +139,7 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
         </Table>
       </div>
 
-      {/* O MODAL FICA AQUI, FORA DA TABELA */}
+      {/* MODAL DE HISTÓRICO (Fica invisível até ser chamado) */}
       <HistoryModal 
         isOpen={historyOpen} 
         onClose={() => setHistoryOpen(false)} 
