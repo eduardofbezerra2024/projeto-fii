@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Loader2, Building2 } from 'lucide-react'; // Ícone novo
+import { Search, Loader2, Building2, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,11 +13,9 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
   const [price, setPrice] = useState('');
   const [purchaseDate, setPurchaseDate] = useState('');
   const [lastDividend, setLastDividend] = useState('');
-  // NOVO ESTADO PARA O TIPO
   const [fiiType, setFiiType] = useState('Tijolo'); 
   
   const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
   const [fiiData, setFiiData] = useState(null);
 
   useEffect(() => {
@@ -27,7 +25,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
       setPrice(editingFII.price);
       setPurchaseDate(editingFII.purchase_date || '');
       setLastDividend(editingFII.last_dividend || '');
-      setFiiType(editingFII.fii_type || 'Tijolo'); // Carrega o tipo salvo
+      setFiiType(editingFII.fii_type || 'Tijolo');
       setFiiData({
         name: editingFII.name || '',
         sector: editingFII.sector || '',
@@ -42,22 +40,37 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     setQuantity('');
     setPrice('');
     setLastDividend('');
-    setFiiType('Tijolo'); // Padrão
+    setFiiType('Tijolo');
     setPurchaseDate(new Date().toISOString().split('T')[0]);
     setFiiData(null);
-    setSearchError('');
   };
 
+  // --- AQUI ACONTECE A MÁGICA ---
   const handleSearchTicker = async () => {
     if (!ticker || ticker.length < 4) return;
     if (isSearching) return;
 
     setIsSearching(true);
-    setSearchError('');
+    setFiiData(null);
 
     try {
+      // 1. Busca Preço (Brapi - Oficial)
       const quote = await getFiiQuote(ticker.toUpperCase());
       
+      // 2. Busca Dividendo (Nossa API Secreta)
+      let scrapedDividend = 0;
+      try {
+        // Chama a função que criamos na pasta api/
+        const response = await fetch(`/api/dividend?ticker=${ticker}`);
+        const data = await response.json();
+        if (data.dividend) {
+            scrapedDividend = data.dividend;
+            console.log("Dividendo encontrado via Scraper:", scrapedDividend);
+        }
+      } catch (err) {
+        console.error("Falha na busca do dividendo:", err);
+      }
+
       if (quote) {
         setFiiData({
           name: quote.name,
@@ -65,12 +78,24 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
           currentPrice: quote.price
         });
         
+        // Auto-preenche Preço se estiver vazio
         if (!price || !editingFII) {
           setPrice(quote.price);
-          toast({ title: "Preço atual preenchido!" });
         }
+
+        // Auto-preenche Dividendo se achou e o campo estiver vazio
+        if (scrapedDividend > 0 && (!lastDividend || !editingFII)) {
+            setLastDividend(scrapedDividend);
+            toast({ 
+                title: "Dados encontrados!", 
+                description: `Preço: R$ ${quote.price} | Últ. Rendimento: R$ ${scrapedDividend}` 
+            });
+        } else {
+            toast({ description: `Preço atual: R$ ${quote.price}` });
+        }
+
       } else {
-        setSearchError('Fundo não encontrado.');
+        toast({ variant: "destructive", title: "Fundo não encontrado." });
       }
     } catch (error) {
       console.error(error);
@@ -81,7 +106,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
 
   const handleSave = () => {
     if (!ticker || !quantity || !price) {
-      toast({ title: "Dados incompletos", description: "Preencha Ticker, Quantidade e Preço.", variant: "destructive" });
+      toast({ title: "Dados incompletos", variant: "destructive" });
       return;
     }
 
@@ -91,7 +116,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
       price: Number(price),
       purchaseDate: purchaseDate,
       lastDividend: Number(lastDividend) || 0,
-      fiiType: fiiType, // Envia o tipo escolhido
+      fiiType: fiiType,
       sector: fiiData?.sector || 'Fundo Imobiliário',
       name: fiiData?.name || ticker.toUpperCase()
     };
@@ -108,7 +133,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
         </DialogHeader>
         
         <div className="grid gap-4 py-4">
-          {/* Ticker e Busca */}
+          {/* Ticker */}
           <div className="grid gap-2">
             <Label htmlFor="ticker">Ticker</Label>
             <div className="flex gap-2">
@@ -116,7 +141,8 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 id="ticker"
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                onBlur={handleSearchTicker}
+                onBlur={handleSearchTicker} // Busca ao sair do campo
+                onKeyDown={(e) => e.key === 'Enter' && handleSearchTicker()}
                 placeholder="Ex: MXRF11"
                 disabled={!!editingFII}
                 className="uppercase"
@@ -140,32 +166,41 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 <Label>Data Compra</Label>
                 <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
             </div>
+            
+            {/* Campo de Dividendo */}
             <div>
-                <Label className="text-blue-600">Último Provento</Label>
-                <Input type="number" step="0.01" value={lastDividend} onChange={(e) => setLastDividend(e.target.value)} placeholder="0.00" />
+                <Label className="text-blue-600 flex items-center justify-between">
+                    Último Provento
+                    {isSearching && <Loader2 className="h-3 w-3 animate-spin" />}
+                </Label>
+                <div className="relative">
+                    <Input 
+                        type="number" 
+                        step="0.01" 
+                        value={lastDividend} 
+                        onChange={(e) => setLastDividend(e.target.value)} 
+                        placeholder="0.00" 
+                    />
+                    <Coins className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
+                </div>
             </div>
           </div>
 
-          {/* NOVO CAMPO: TIPO DO ATIVO */}
           <div className="grid gap-2">
-            <Label htmlFor="type" className="flex items-center gap-1">
-                <Building2 className="h-3 w-3" /> Tipo do Fundo
-            </Label>
+            <Label htmlFor="type"><Building2 className="h-3 w-3 inline mr-1" /> Tipo do Fundo</Label>
             <select
                 id="type"
                 value={fiiType}
                 onChange={(e) => setFiiType(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             >
-                <option value="Tijolo">🧱 Tijolo (Imóveis Físicos)</option>
-                <option value="Papel">📄 Papel (CRIs/Dívidas)</option>
-                <option value="Hibrido">⚖️ Híbrido (Misto)</option>
-                <option value="Fiagro">🚜 Fiagro (Agronegócio)</option>
-                <option value="Infra">🏗️ Infra (Infraestrutura)</option>
-                <option value="Outros">❓ Outros</option>
+                <option value="Tijolo">🧱 Tijolo</option>
+                <option value="Papel">📄 Papel</option>
+                <option value="Hibrido">⚖️ Híbrido</option>
+                <option value="Fiagro">🚜 Fiagro</option>
+                <option value="Infra">🏗️ Infra</option>
             </select>
           </div>
-
         </div>
 
         <DialogFooter>
