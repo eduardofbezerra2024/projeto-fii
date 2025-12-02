@@ -45,11 +45,12 @@ const Dashboard = () => {
     'Indefinido': '#cbd5e1'
   };
 
-  // --- 2. DADOS FAKE PARA EVOLUÇÃO (Futuramente pegaremos do histórico) ---
+ // Pega o mês atual (ex: "Dez")
+  const currentMonth = new Date().toLocaleString('pt-BR', { month: 'short' });
+
   const evolutionData = [
-    { name: 'Jan', valor: 1000 },
-    { name: 'Fev', valor: 1500 },
-    { name: 'Mar', valor: metrics.currentValue || 2000 },
+    // Mostra apenas o valor atual como se fosse o mês corrente
+    { name: currentMonth, valor: metrics.currentValue },
   ];
 
   return (
