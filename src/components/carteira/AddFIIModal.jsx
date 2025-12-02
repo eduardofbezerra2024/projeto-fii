@@ -12,12 +12,10 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
   const [purchaseDate, setPurchaseDate] = useState('');
-  // 1. ESTADO NOVO PARA O DIVIDENDO
   const [lastDividend, setLastDividend] = useState('');
   const [fiiType, setFiiType] = useState('Tijolo'); 
   
   const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState('');
   const [fiiData, setFiiData] = useState(null);
 
   useEffect(() => {
@@ -26,7 +24,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
       setQuantity(editingFII.quantity);
       setPrice(editingFII.price);
       setPurchaseDate(editingFII.purchase_date || '');
-      setLastDividend(editingFII.last_dividend || ''); // Carrega o valor salvo
+      setLastDividend(editingFII.last_dividend || '');
       setFiiType(editingFII.fii_type || 'Tijolo');
       setFiiData({
         name: editingFII.name || '',
@@ -43,9 +41,8 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     setPrice('');
     setLastDividend('');
     setFiiType('Tijolo');
-    setPurchaseDate(new Date().toISOString().split('T')[0]);
+    setPurchaseDate(new Date().toISOString().split('T')[0]); // Data de hoje
     setFiiData(null);
-    setSearchError('');
   };
 
   const handleSearchTicker = async () => {
@@ -53,15 +50,13 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     if (isSearching) return;
 
     setIsSearching(true);
-    setSearchError('');
     setFiiData(null);
 
     try {
-      // 1. Busca Preço (Brapi)
+      // 1. Busca Preço Oficial
       const quote = await getFiiQuote(ticker.toUpperCase());
       
-      // 2. Tenta buscar Dividendo (API Local/Scraper)
-      // Se você não criou a api/dividend.js, isso vai falhar silenciosamente e deixar o campo vazio
+      // 2. Tenta buscar Dividendos (via nossa API)
       let scrapedDividend = 0;
       try {
         const response = await fetch(`/api/dividend?ticker=${ticker}`);
@@ -70,7 +65,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
             if (data.dividend) scrapedDividend = data.dividend;
         }
       } catch (err) {
-        // Ignora erro de busca de dividendo
+        console.log("Busca de dividendo falhou, ignorando...");
       }
 
       if (quote) {
@@ -80,21 +75,21 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
           currentPrice: quote.price
         });
         
-        // Auto-preenche Preço
+        // Só preenche o preço se estiver vazio ou se estivermos criando um novo
         if (!price || !editingFII) {
           setPrice(quote.price);
         }
 
-        // Auto-preenche Dividendo se achou
+        // Só preenche o dividendo se achou algo e o campo está vazio
         if (scrapedDividend > 0 && (!lastDividend || !editingFII)) {
             setLastDividend(scrapedDividend);
-            toast({ description: `Preço: R$ ${quote.price} | Dividendo: R$ ${scrapedDividend}` });
+            toast({ description: `Dados encontrados! Preço: ${quote.price}` });
         } else {
             toast({ description: `Preço atual: R$ ${quote.price}` });
         }
 
       } else {
-        setSearchError('Fundo não encontrado.');
+        toast({ variant: "destructive", title: "Fundo não encontrado." });
       }
     } catch (error) {
       console.error(error);
@@ -104,17 +99,25 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
   };
 
   const handleSave = () => {
-    if (!ticker || !quantity || !price) {
-      toast({ title: "Dados incompletos", variant: "destructive" });
-      return;
+    // --- AQUI ESTÁ A BLINDAGEM ---
+    if (!ticker) {
+        toast({ title: "Falta o Ticker", description: "Qual é o código do fundo?", variant: "destructive" });
+        return;
+    }
+    if (!quantity || Number(quantity) <= 0) {
+        toast({ title: "Quantidade Inválida", description: "Digite quantas cotas você tem.", variant: "destructive" });
+        return;
+    }
+    if (!price || Number(price) <= 0) {
+        toast({ title: "Preço Inválido", description: "Digite quanto você pagou.", variant: "destructive" });
+        return;
     }
 
     const fiiToSave = {
       ticker: ticker.toUpperCase(),
       quantity: Number(quantity),
-      price: Number(price),
-      purchaseDate: purchaseDate,
-      // 2. SALVA O DIVIDENDO
+      price: Number(price), // Converte para número antes de enviar
+      purchaseDate: purchaseDate || new Date(), // Garante uma data
       lastDividend: Number(lastDividend) || 0,
       fiiType: fiiType,
       sector: fiiData?.sector || 'Fundo Imobiliário',
@@ -133,7 +136,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
         </DialogHeader>
         
         <div className="grid gap-4 py-4">
-          {/* Ticker */}
           <div className="grid gap-2">
             <Label htmlFor="ticker">Ticker</Label>
             <div className="flex gap-2">
@@ -142,7 +144,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
                 onBlur={handleSearchTicker}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearchTicker()}
                 placeholder="Ex: MXRF11"
                 disabled={!!editingFII}
                 className="uppercase"
@@ -154,7 +155,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
               )}
             </div>
             {fiiData && <p className="text-xs text-green-600 font-medium">✅ {fiiData.name}</p>}
-            {searchError && <p className="text-xs text-red-500">{searchError}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -167,8 +167,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 <Label>Data Compra</Label>
                 <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
             </div>
-            
-            {/* 3. CAMPO DE DIVIDENDO NA TELA */}
             <div>
                 <Label className="text-blue-600 flex items-center justify-between">
                     Último Provento
