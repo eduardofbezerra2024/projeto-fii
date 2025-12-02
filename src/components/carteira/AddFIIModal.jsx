@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Loader2, Building2, Coins } from 'lucide-react';
+import { Search, Loader2, Building2, Coins, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,7 +41,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     setPrice('');
     setLastDividend('');
     setFiiType('Tijolo');
-    setPurchaseDate(new Date().toISOString().split('T')[0]); // Data de hoje
+    setPurchaseDate(new Date().toISOString().split('T')[0]);
     setFiiData(null);
   };
 
@@ -53,21 +53,9 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     setFiiData(null);
 
     try {
-      // 1. Busca Preço Oficial
+      // Busca apenas o preço na API oficial (Brapi) que é rápida e confiável
       const quote = await getFiiQuote(ticker.toUpperCase());
       
-      // 2. Tenta buscar Dividendos (via nossa API)
-      let scrapedDividend = 0;
-      try {
-        const response = await fetch(`/api/dividend?ticker=${ticker}`);
-        if (response.ok) {
-            const data = await response.json();
-            if (data.dividend) scrapedDividend = data.dividend;
-        }
-      } catch (err) {
-        console.log("Busca de dividendo falhou, ignorando...");
-      }
-
       if (quote) {
         setFiiData({
           name: quote.name,
@@ -75,19 +63,10 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
           currentPrice: quote.price
         });
         
-        // Só preenche o preço se estiver vazio ou se estivermos criando um novo
         if (!price || !editingFII) {
           setPrice(quote.price);
+          toast({ description: `Preço atual: R$ ${quote.price}` });
         }
-
-        // Só preenche o dividendo se achou algo e o campo está vazio
-        if (scrapedDividend > 0 && (!lastDividend || !editingFII)) {
-            setLastDividend(scrapedDividend);
-            toast({ description: `Dados encontrados! Preço: ${quote.price}` });
-        } else {
-            toast({ description: `Preço atual: R$ ${quote.price}` });
-        }
-
       } else {
         toast({ variant: "destructive", title: "Fundo não encontrado." });
       }
@@ -99,25 +78,16 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
   };
 
   const handleSave = () => {
-    // --- AQUI ESTÁ A BLINDAGEM ---
-    if (!ticker) {
-        toast({ title: "Falta o Ticker", description: "Qual é o código do fundo?", variant: "destructive" });
-        return;
-    }
-    if (!quantity || Number(quantity) <= 0) {
-        toast({ title: "Quantidade Inválida", description: "Digite quantas cotas você tem.", variant: "destructive" });
-        return;
-    }
-    if (!price || Number(price) <= 0) {
-        toast({ title: "Preço Inválido", description: "Digite quanto você pagou.", variant: "destructive" });
-        return;
+    if (!ticker || !quantity || !price) {
+      toast({ title: "Dados incompletos", variant: "destructive" });
+      return;
     }
 
     const fiiToSave = {
       ticker: ticker.toUpperCase(),
       quantity: Number(quantity),
-      price: Number(price), // Converte para número antes de enviar
-      purchaseDate: purchaseDate || new Date(), // Garante uma data
+      price: Number(price),
+      purchaseDate: purchaseDate,
       lastDividend: Number(lastDividend) || 0,
       fiiType: fiiType,
       sector: fiiData?.sector || 'Fundo Imobiliário',
@@ -136,6 +106,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
         </DialogHeader>
         
         <div className="grid gap-4 py-4">
+          {/* Ticker */}
           <div className="grid gap-2">
             <Label htmlFor="ticker">Ticker</Label>
             <div className="flex gap-2">
@@ -167,11 +138,23 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 <Label>Data Compra</Label>
                 <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
             </div>
+            
+            {/* Campo de Dividendo com Link de Ajuda */}
             <div>
-                <Label className="text-blue-600 flex items-center justify-between">
-                    Último Provento
-                    {isSearching && <Loader2 className="h-3 w-3 animate-spin" />}
-                </Label>
+                <div className="flex justify-between items-center mb-1">
+                    <Label className="text-blue-600">Último Provento</Label>
+                    {ticker.length >= 4 && (
+                        <a 
+                            href={`https://statusinvest.com.br/fundos-imobiliarios/${ticker.toLowerCase()}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-gray-400 hover:text-blue-500 flex items-center gap-1 cursor-pointer"
+                            title="Ver no Status Invest"
+                        >
+                            Ver valor <ExternalLink className="h-3 w-3" />
+                        </a>
+                    )}
+                </div>
                 <div className="relative">
                     <Input 
                         type="number" 
