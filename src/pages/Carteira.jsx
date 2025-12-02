@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
-import { Plus, Grid, List, RefreshCw, Clock, Percent } from 'lucide-react';
+import { Plus, Grid, List, RefreshCw, Clock, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CarteiraTable from '@/components/carteira/CarteiraTable';
 import FIICard from '@/components/carteira/FIICard';
@@ -8,10 +8,10 @@ import AddFIIModal from '@/components/carteira/AddFIIModal';
 import { formatCurrency } from '@/utils/formatters';
 import { toast } from '@/components/ui/use-toast';
 import { YieldService } from '@/services/YieldService';
-import useCarteiraStore from '@/store/carteiraStore'; // Usando a store direto
+import useCarteiraStore from '@/store/carteiraStore';
 
 const Carteira = () => {
-  // Usamos a store diretamente agora, pois ela gerencia tudo
+  // Usamos a store diretamente agora, pois ela gerencia o estado e o banco
   const { 
     portfolio, 
     metrics, 
@@ -38,27 +38,13 @@ const Carteira = () => {
       setLastUpdateDate(new Date(storedDate));
     }
     
-    // Check if we need an automatic refresh on page load (if > 24h old or never updated)
+    // Checa se precisa atualizar automaticamente (se passou 24h)
     const shouldRefresh = !storedDate || (new Date() - new Date(storedDate)) > 24 * 60 * 60 * 1000;
     if (shouldRefresh && portfolio.length > 0) {
       handleRefreshYields();
     }
-  }, []); // Executa apenas uma vez ao montar o componente
+  }, []); // Executa apenas uma vez ao montar
 
-  // --- CÁLCULO AUTOMÁTICO DO YIELD MÉDIO DA CARTEIRA ---
-  const averageYield = useMemo(() => {
-    if (!portfolio || portfolio.length === 0 || metrics.currentValue === 0) return 0;
-
-    const weightedSum = portfolio.reduce((acc, fii) => {
-      const fiiTotalValue = (fii.currentPrice || 0) * (fii.quantity || 0);
-      const fiiYield = fii.dividendYield || 0;
-      return acc + (fiiTotalValue * fiiYield);
-    }, 0);
-
-    return weightedSum / metrics.currentValue;
-  }, [portfolio, metrics.currentValue]);
-  // -----------------------------------------------------
-  
   const handleAddFII = () => {
     setEditingFII(null);
     setIsModalOpen(true);
@@ -70,27 +56,43 @@ const Carteira = () => {
   };
   
   const handleSaveFII = async (fiiData) => {
-    if (editingFII) {
-      await updateFII(editingFII.id, fiiData);
-       toast({
-        title: 'Sucesso',
-        description: `${fiiData.ticker} atualizado na carteira.`
-      });
-    } else {
-      await addFII(fiiData);
-       toast({
-        title: 'Sucesso',
-        description: `${fiiData.ticker} adicionado à carteira.`
+    try {
+      if (editingFII) {
+        await updateFII(editingFII.id, fiiData);
+        toast({
+          title: 'Sucesso',
+          description: `${fiiData.ticker} atualizado na carteira.`
+        });
+      } else {
+        await addFII(fiiData);
+        toast({
+          title: 'Sucesso',
+          description: `${fiiData.ticker} adicionado à carteira.`
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Falha ao salvar no banco de dados.',
+        variant: 'destructive'
       });
     }
   };
   
   const handleRemoveFII = async (id) => {
-    await removeFII(id);
-    toast({
-      title: 'Sucesso',
-      description: 'FII removido da carteira'
-    });
+    try {
+      await removeFII(id);
+      toast({
+        title: 'Sucesso',
+        description: 'FII removido da carteira'
+      });
+    } catch (error) {
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível remover o item.',
+        variant: 'destructive'
+      });
+    }
   };
 
   const handleRefreshYields = async () => {
@@ -201,15 +203,18 @@ const Carteira = () => {
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Valor Atual</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(metrics.currentValue)}</p>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Yield Médio (12m)</p>
+          
+          {/* CARD DE RENDA MENSAL (Novo) */}
+          <div className="bg-green-50 dark:bg-green-900/10 rounded-xl p-6 shadow-sm border border-green-100 dark:border-green-900/30">
+            <p className="text-sm text-green-800 dark:text-green-400 mb-1 font-medium">Renda Mensal Estimada</p>
             <div className="flex items-center">
-                <Percent className="h-5 w-5 text-blue-500 mr-2" />
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {(averageYield > 1 ? averageYield : averageYield * 100).toFixed(2)}%
+                <Coins className="h-5 w-5 text-green-600 mr-2" />
+                <p className="text-2xl font-bold text-green-700 dark:text-green-300">
+                  {formatCurrency(metrics.totalDividends)}
                 </p>
             </div>
           </div>
+
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Lucro/Prejuízo</p>
             <p className={`text-2xl font-bold ${metrics.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
