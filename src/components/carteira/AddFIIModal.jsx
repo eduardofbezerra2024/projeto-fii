@@ -127,7 +127,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-[95vw] max-w-[500px] rounded-xl overflow-y-auto max-h-[90vh]">
         <DialogHeader>
-          <DialogTitle>{editingFII ? 'Editar Ativo' : 'Adicionar à Carteira'}</DialogTitle>
+          <DialogTitle>{editingFII ? 'Editar Ativo' : 'Nova Compra'}</DialogTitle>
         </DialogHeader>
         
         <div className="grid gap-4 py-4">
