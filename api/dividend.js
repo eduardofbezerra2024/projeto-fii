@@ -10,11 +10,13 @@ export default async function handler(req, res) {
   try {
     const url = `https://investidor10.com.br/fiis/${ticker.toLowerCase()}/`;
     
-    // Simula um navegador real
+    // Headers reforçados para evitar bloqueio (403 Forbidden)
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Referer': 'https://google.com',
       }
     });
 
@@ -27,42 +29,54 @@ export default async function handler(req, res) {
 
     let lastDividend = 0;
 
-    // --- ESTRATÉGIA BASEADA NO SEU PRINT ---
-    // Procura dentro das divs com classe 'desc'
-    $('div.desc').each((i, el) => {
-        // Pega o texto e limpa (tira espaços e quebras de linha)
-        const text = $(el).text().trim().toUpperCase();
+    // --- ESTRATÉGIA BASEADA NOS PRINTS ---
+    // Itera sobre todos os cartões de informação (div.cell)
+    $('div.cell').each((i, el) => {
+        // Dentro da célula, busca a div de descrição
+        const descDiv = $(el).find('div.desc');
         
-        // Se achou o rótulo "ÚLTIMO RENDIMENTO"
-        if (text.includes('ÚLTIMO RENDIMENTO')) {
+        // Pega o texto do título (o span dentro da desc)
+        const titleText = descDiv.find('span.name').text().trim().toUpperCase();
+        
+        // Verifica se é o card correto
+        if (titleText.includes('ÚLTIMO RENDIMENTO')) {
             
-            // O valor está no PRÓXIMO elemento irmão (o .value logo abaixo)
-            // .next() pega o vizinho imediato
-            const valueDiv = $(el).next('.value');
+            // Pega o valor que está dentro de div.value > span
+            const valueSpan = descDiv.find('div.value > span');
+            const valueText = valueSpan.text().trim(); // Ex: "R$ 0,10"
             
-            if (valueDiv.length > 0) {
-                const valueText = valueDiv.find('span').text().trim(); // "R$ 0,10"
+            if (valueText) {
+                // Limpeza: Remove R$, espaços e troca vírgula por ponto
+                const cleanValue = valueText
+                    .replace('R$', '')
+                    .replace(/\s/g, '') // remove espaços
+                    .replace(',', '.')
+                    .trim();
                 
-                // Limpa o valor (tira R$ e troca vírgula por ponto)
-                const cleanValue = valueText.replace('R$', '').replace(',', '.').trim();
                 const parsed = parseFloat(cleanValue);
                 
                 if (!isNaN(parsed)) {
                     lastDividend = parsed;
-                    return false; // Para o loop pois achamos!
+                    return false; // Break do loop do jQuery/Cheerio
                 }
             }
         }
     });
 
+    // Se não achou (manteve 0), loga erro mas retorna 0 para não quebrar o front
+    if (lastDividend === 0) {
+        console.warn(`Aviso: Dividendos não encontrados para ${ticker}. Layout pode ter mudado.`);
+    }
+
     return res.status(200).json({ 
         dividend: lastDividend, 
         ticker: ticker.toUpperCase(),
-        source: 'Investidor10 (Scraper V4)' 
+        source: 'Investidor10 (Scraper V5)' 
     });
 
   } catch (error) {
     console.error('Erro no Scraper:', error);
+    // Retorna 200 com valor 0 para o frontend tratar e permitir inserção manual
     return res.status(200).json({ dividend: 0, source: 'Error', details: error.message });
   }
 }
