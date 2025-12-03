@@ -1,21 +1,31 @@
 import { create } from 'zustand';
 import { PortfolioService } from '@/services/UserPortfolioService';
 
-// --- FUNÇÃO DE CORREÇÃO (NOVA) ---
-// Transforma "R$ 33,34" ou "33,34" em 33.34 (número válido)
+// --- FUNÇÃO DE CORREÇÃO SUPER ROBUSTA ---
 const parseValue = (value) => {
+  if (value === null || value === undefined) return 0;
   if (typeof value === 'number') return value;
-  if (!value) return 0;
   
-  // Converte para string, remove R$, espaços e pontos de milhar
-  let str = String(value).replace('R$', '').trim();
+  // Converte para string para limpar
+  let str = String(value).trim();
   
-  // Se tiver vírgula, assume que é decimal: remove pontos de milhar e troca vírgula por ponto
+  // Se for vazio
+  if (str === '') return 0;
+
+  // Remove o "R$" e espaços extras
+  str = str.replace('R$', '').trim();
+
+  // DETECÇÃO DE FORMATO:
+  // Se tiver vírgula, assumimos formato Brasileiro (ex: 1.000,50 ou 33,45)
   if (str.includes(',')) {
-    str = str.replace(/\./g, '').replace(',', '.');
-  }
-  
-  return parseFloat(str) || 0;
+    str = str.replace(/\./g, ''); // Remove todos os pontos de milhar
+    str = str.replace(',', '.');  // Troca a vírgula decimal por ponto
+  } 
+  // Se NÃO tiver vírgula, mas tiver ponto, assumimos formato Americano ou JS puro (33.45)
+  // (Nesse caso não fazemos nada, o parseFloat já entende)
+
+  const result = parseFloat(str);
+  return isNaN(result) ? 0 : result;
 };
 
 // Função auxiliar de cálculo
@@ -25,14 +35,17 @@ const calculateMetrics = (portfolio) => {
   let totalDividends = 0;
 
   portfolio.forEach(fii => {
-    // Agora usamos parseValue para garantir que não venha NaN
+    // Garante números puros
     const qty = parseValue(fii.quantity);
     const pricePaid = parseValue(fii.price); 
-    const currPrice = parseValue(fii.currentPrice) || pricePaid; // Fallback se preço atual for 0
+    const currPrice = parseValue(fii.currentPrice);
+    
+    // Se o preço atual for 0, usamos o preço pago para não zerar o total
+    const finalCurrentPrice = currPrice > 0 ? currPrice : pricePaid;
     const dividend = parseValue(fii.last_dividend);
 
     totalInvested += pricePaid * qty;
-    currentValue += currPrice * qty;
+    currentValue += finalCurrentPrice * qty;
     totalDividends += dividend * qty;
   });
 
@@ -51,20 +64,22 @@ const useCarteiraStore = create((set, get) => ({
     try {
       const data = await PortfolioService.getPortfolio();
       
+      // LOG PARA DEBUG (Olhe no Console F12 se der erro)
+      console.log("DADOS VINDOS DO BANCO:", data);
+
       const formatted = data.map(item => ({
         ...item,
         id: item.id,
-        // --- AQUI ESTAVA O ERRO ---
-        // Trocamos Number() por parseValue() para aceitar vírgulas
+        // Aplica a limpeza em todos os campos numéricos
         price: parseValue(item.price),
         quantity: parseValue(item.quantity),
-        // Se currentPrice vier vazio, usa o preço pago inicialmente
         currentPrice: parseValue(item.currentPrice) || parseValue(item.price),
         last_dividend: parseValue(item.last_dividend),
-        // --------------------------
         fii_type: item.fii_type,
-        owner: item.owner || 'Geral'
+        owner: item.owner || 'Geral' 
       }));
+
+      console.log("DADOS FORMATADOS:", formatted);
 
       set({ 
         portfolio: formatted, 
@@ -101,18 +116,9 @@ const useCarteiraStore = create((set, get) => ({
 
   updateFII: async (id, updatedData) => {
     try {
-      const toUpdate = {};
-      // Usa parseValue aqui também para garantir que salve certo no banco se quiser
-      if (updatedData.quantity) toUpdate.quantity = updatedData.quantity;
-      if (updatedData.price) toUpdate.price = updatedData.price;
-      if (updatedData.purchaseDate) toUpdate.purchase_date = updatedData.purchaseDate;
-      if (updatedData.lastDividend) toUpdate.last_dividend = updatedData.lastDividend;
-      if (updatedData.fiiType) toUpdate.fii_type = updatedData.fiiType;
-      if (updatedData.owner) toUpdate.owner = updatedData.owner; 
-
+      const toUpdate = { ...updatedData };
       await PortfolioService.updateAsset(id, toUpdate);
       get().fetchPortfolio();
-
     } catch (error) {
       console.error("Erro ao atualizar:", error);
     }

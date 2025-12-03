@@ -5,31 +5,49 @@ import { Button } from '@/components/ui/button';
 import CarteiraTable from '@/components/carteira/CarteiraTable';
 import FIICard from '@/components/carteira/FIICard';
 import AddFIIModal from '@/components/carteira/AddFIIModal';
-import { useCarteira } from '@/hooks/useCarteira';
 import { formatCurrency } from '@/utils/formatters';
 import { toast } from '@/components/ui/use-toast';
 import { YieldService } from '@/services/YieldService';
-import useCarteiraStore from '@/store/carteiraStore';
+import useCarteiraStore from '@/store/carteiraStore'; // Usando apenas o store direto
 
 const Carteira = () => {
-  const { portfolio, metrics, addFII, updateFII, removeFII } = useCarteira();
-  const { updateYields } = useCarteiraStore();
+  // Puxamos tudo do store para garantir sincronia com o Dashboard
+  const { 
+    portfolio, 
+    metrics, 
+    addFII, 
+    updateFII, 
+    removeFII, 
+    fetchPortfolio, // Importante: precisamos dessa função aqui
+    updateYields,
+    isLoading 
+  } = useCarteiraStore();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFII, setEditingFII] = useState(null);
   const [viewMode, setViewMode] = useState('table');
   const [isUpdating, setIsUpdating] = useState(false);
   const [lastUpdateDate, setLastUpdateDate] = useState(null);
 
+  // --- CORREÇÃO TELA BRANCA ---
+  // Se entrar direto nesta tela e não tiver dados, carrega do banco
+  useEffect(() => {
+    if (portfolio.length === 0) {
+      fetchPortfolio();
+    }
+  }, [fetchPortfolio, portfolio.length]);
+  // ---------------------------
+
   // Detectar mobile para mudar viewMode automaticamente
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 768) {
-        setViewMode('grid'); // No celular, força modo Grid (cards)
+        setViewMode('grid'); 
       } else {
         setViewMode('table');
       }
     };
-    handleResize(); // Executa ao iniciar
+    handleResize(); 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -38,11 +56,6 @@ const Carteira = () => {
     const storedDate = YieldService.getLastUpdate();
     if (storedDate) {
       setLastUpdateDate(new Date(storedDate));
-    }
-    
-    const shouldRefresh = !storedDate || (new Date() - new Date(storedDate)) > 24 * 60 * 60 * 1000;
-    if (shouldRefresh && portfolio.length > 0) {
-      handleRefreshYields();
     }
   }, []);
 
@@ -68,18 +81,18 @@ const Carteira = () => {
     setIsModalOpen(true);
   };
   
-  const handleSaveFII = (fiiData) => {
+  const handleSaveFII = async (fiiData) => {
     if (editingFII) {
-      updateFII(editingFII.id, fiiData);
+      await updateFII(editingFII.id, fiiData);
        toast({ title: 'Sucesso', description: `${fiiData.ticker} atualizado na carteira.` });
     } else {
-      addFII(fiiData);
+      await addFII(fiiData);
        toast({ title: 'Sucesso', description: `${fiiData.ticker} adicionado à carteira.` });
     }
   };
   
-  const handleRemoveFII = (id) => {
-    removeFII(id);
+  const handleRemoveFII = async (id) => {
+    await removeFII(id);
     toast({ title: 'Sucesso', description: 'FII removido da carteira' });
   };
 
@@ -135,7 +148,6 @@ const Carteira = () => {
             </div>
           </div>
           
-          {/* Botões de Ação - Responsivos */}
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
@@ -150,7 +162,7 @@ const Carteira = () => {
 
             <div className="hidden sm:block h-6 w-px bg-gray-200 dark:bg-gray-700 mx-2"></div>
 
-            <div className="hidden md:flex gap-2"> {/* Esconde toggle de visualização no celular pois forçamos GRID */}
+            <div className="hidden md:flex gap-2"> 
                 <Button variant="outline" size="icon" onClick={() => setViewMode('table')} className={viewMode === 'table' ? 'bg-green-50 dark:bg-green-900/20' : ''}>
                 <List className="h-5 w-5" />
                 </Button>
@@ -166,15 +178,20 @@ const Carteira = () => {
           </div>
         </div>
         
-        {/* GRID DE MÉTRICAS OTIMIZADO (2 Colunas no Mobile) */}
+        {/* GRID DE MÉTRICAS */}
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Total Investido</p>
-            <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">{formatCurrency(metrics.totalInvested)}</p>
+            {/* Se estiver carregando, mostra um loader simples ou traço */}
+            <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
+              {isLoading ? "..." : formatCurrency(metrics.totalInvested)}
+            </p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Valor Atual</p>
-            <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">{formatCurrency(metrics.currentValue)}</p>
+            <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
+               {isLoading ? "..." : formatCurrency(metrics.currentValue)}
+            </p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Yield Médio</p>
@@ -188,7 +205,7 @@ const Carteira = () => {
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Lucro/Prejuízo</p>
             <p className={`text-lg sm:text-2xl font-bold truncate ${metrics.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(metrics.profitLoss)}
+              {isLoading ? "..." : formatCurrency(metrics.profitLoss)}
             </p>
           </div>
         </div>
@@ -196,7 +213,7 @@ const Carteira = () => {
         {/* Lógica de Exibição */}
         {portfolio.length > 0 ? (
           viewMode === 'table' ? (
-            <div className="overflow-x-auto"> {/* Permite scroll horizontal na tabela se necessário */}
+            <div className="overflow-x-auto">
                 <CarteiraTable
                 portfolio={portfolio}
                 onEdit={handleEditFII}
@@ -212,12 +229,18 @@ const Carteira = () => {
           )
         ) : (
           <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mx-4 sm:mx-0">
-            <h3 className="text-xl font-medium text-gray-900 dark:text-white">Sua carteira está vazia</h3>
-            <p className="text-gray-500 dark:text-gray-400 mt-2 px-4">Adicione seu primeiro FII para começar a análise.</p>
-            <Button onClick={handleAddFII} className="mt-6 bg-green-600 hover:bg-green-700">
-              <Plus className="h-5 w-5 mr-2" />
-              Adicionar FII
-            </Button>
+            {isLoading ? (
+               <p className="text-gray-500">Carregando carteira...</p>
+            ) : (
+              <>
+                <h3 className="text-xl font-medium text-gray-900 dark:text-white">Sua carteira está vazia</h3>
+                <p className="text-gray-500 dark:text-gray-400 mt-2 px-4">Adicione seu primeiro FII para começar a análise.</p>
+                <Button onClick={handleAddFII} className="mt-6 bg-green-600 hover:bg-green-700">
+                  <Plus className="h-5 w-5 mr-2" />
+                  Adicionar FII
+                </Button>
+              </>
+            )}
           </div>
         )}
         
