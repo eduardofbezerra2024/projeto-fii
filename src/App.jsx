@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from '@/components/common/Sidebar';
@@ -43,13 +42,22 @@ const AuthLayout = ({ children }) => {
   return !user ? children : <Navigate to={ROUTES.DASHBOARD} />;
 };
 
+// --- AQUI ESTÁ A CORREÇÃO DO LAYOUT ---
 const AppLayout = ({ children }) => {
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
       <Sidebar />
-      <div className="flex-1 lg:ml-64">
+      
+      {/* CORREÇÃO DE ESPAÇAMENTO:
+          flex-1: Ocupa o espaço restante
+          ml-0: Sem margem esquerda no celular
+          md:ml-64: Margem de 256px no PC (para o menu lateral)
+          pb-20: Espaço embaixo no celular (para a barra inferior)
+          md:pb-0: Sem espaço embaixo no PC
+      */}
+      <div className="flex-1 ml-0 md:ml-64 pb-20 md:pb-0 transition-all duration-300">
         <Header />
-        <main className="p-4 sm:p-6">
+        <main className="p-4 sm:p-6 animate-in fade-in zoom-in-95 duration-300">
           {children}
         </main>
       </div>
@@ -85,7 +93,6 @@ function App() {
         <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      {/* In-app notifications controller */}
       <AlertNotification />
     </Router>
   );

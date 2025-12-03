@@ -1,57 +1,70 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Briefcase, 
-  Calculator, 
-  TrendingUp, 
-  Bell, 
-  Settings 
-} from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { LayoutDashboard, Wallet, Calculator, TrendingUp, Bell, Settings } from 'lucide-react';
 import { ROUTES } from '@/utils/constants';
-import { cn } from '@/lib/utils';
 
 const Sidebar = () => {
-  const navItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', path: ROUTES.DASHBOARD },
-    { icon: Briefcase, label: 'Carteira', path: ROUTES.CARTEIRA },
-    { icon: Calculator, label: 'Simulador', path: ROUTES.SIMULADOR },
-    { icon: TrendingUp, label: 'Análise', path: ROUTES.ANALISE },
-    { icon: Bell, label: 'Alertas', path: ROUTES.ALERTAS },
-    { icon: Settings, label: 'Configurações', path: ROUTES.CONFIGURACOES }
+  const location = useLocation();
+  const isActive = (path) => location.pathname === path;
+
+  const menuItems = [
+    { path: ROUTES.DASHBOARD, icon: LayoutDashboard, label: 'Dashboard' },
+    { path: ROUTES.CARTEIRA, icon: Wallet, label: 'Carteira' },
+    { path: ROUTES.SIMULADOR, icon: Calculator, label: 'Simulador' },
+    { path: ROUTES.ANALISE, icon: TrendingUp, label: 'Análise' },
+    { path: ROUTES.ALERTAS, icon: Bell, label: 'Alertas' },
+    { path: ROUTES.CONFIGURACOES, icon: Settings, label: 'Config' },
   ];
-  
+
   return (
-    <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-screen fixed left-0 top-0">
-      <div className="p-6">
-        <div className="flex items-center space-x-2 mb-8">
-          <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-blue-500 rounded-lg flex items-center justify-center">
-            <TrendingUp className="h-6 w-6 text-white" />
-          </div>
-          <span className="text-xl font-bold text-gray-800 dark:text-white">FII Analyzer</span>
-        </div>
-        
-        <nav className="space-y-2">
-          {navItems.map((item) => (
-            <NavLink
+    <>
+      {/* --- VERSÃO DESKTOP (Lateral Esquerda) --- */}
+      {/* Aparece apenas em telas médias ou maiores (md:flex) */}
+      <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-screen fixed left-0 top-0 pt-20 z-40 transition-all duration-300">
+        <div className="flex flex-col gap-1 p-4">
+          {menuItems.map((item) => (
+            <Link
               key={item.path}
               to={item.path}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors',
-                  isActive
-                    ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
-                )
-              }
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                isActive(item.path)
+                  ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+                  : 'text-gray-700 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
             >
               <item.icon className="h-5 w-5" />
-              <span className="font-medium">{item.label}</span>
-            </NavLink>
+              {item.label}
+            </Link>
           ))}
-        </nav>
-      </div>
-    </aside>
+        </div>
+      </aside>
+
+      {/* --- VERSÃO MOBILE (Barra Inferior) --- */}
+      {/* Aparece apenas em telas pequenas (md:hidden) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-50 px-2 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+        <div className="flex justify-around items-center h-16">
+          {menuItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${
+                isActive(item.path)
+                  ? 'text-green-600 dark:text-green-400'
+                  : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'
+              }`}
+            >
+              <item.icon 
+                className={`h-6 w-6 transition-all duration-200 ${isActive(item.path) ? 'scale-110' : ''}`} 
+                strokeWidth={isActive(item.path) ? 2.5 : 2} 
+              />
+              <span className="text-[10px] font-medium truncate w-full text-center">
+                {item.label}
+              </span>
+            </Link>
+          ))}
+        </div>
+      </nav>
+    </>
   );
 };
 
