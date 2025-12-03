@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Edit, Trash2, CalendarDays, Clock } from 'lucide-react';
+import { Edit, Trash2, CalendarDays, Clock, User } from 'lucide-react'; // Adicionei User
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/utils/formatters';
@@ -32,6 +32,8 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
           <TableHeader>
             <TableRow>
               <TableHead>FII / Detalhes</TableHead>
+              {/* NOVA COLUNA: Investidor (Só aparece no PC) */}
+              <TableHead className="hidden md:table-cell">Investidor</TableHead>
               <TableHead className="text-center">Qtd</TableHead>
               <TableHead className="text-right">Preço Médio</TableHead>
               <TableHead className="text-right">Preço Atual</TableHead>
@@ -47,12 +49,12 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
               const quantity = Number(fii.quantity) || 0;
               const avgPrice = Number(fii.price) || 0;
               const currentPrice = Number(fii.currentPrice) || avgPrice;
-              const lastDividend = Number(fii.last_dividend) || 0;
+              const lastDividend = Number(fii.dividendYield || fii.last_dividend) || 0; // Tenta pegar do scraper ou do manual
               
               // Cálculos Financeiros
               const profit = (currentPrice - avgPrice) * quantity;
               const profitPercent = avgPrice > 0 ? (profit / (avgPrice * quantity)) * 100 : 0;
-              const monthlyIncome = lastDividend * quantity;
+              const monthlyIncome = lastDividend * quantity; // Renda mensal estimada
               const yieldOnCost = avgPrice > 0 ? (lastDividend / avgPrice) * 100 : 0;
               
               const timeSince = getTimeSince(fii.purchase_date);
@@ -66,9 +68,14 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
                       {/* Setor */}
                       <span className="text-xs text-gray-500 dark:text-gray-400">{fii.sector || 'Fundo Imobiliário'}</span>
                       
-                      {/* NOVA ETIQUETA DE TIPO COLORIDA */}
+                      {/* INVESTIDOR NO MOBILE: Mostra embaixo do ticker para economizar espaço */}
+                      <p className="md:hidden text-[10px] text-blue-600 font-medium flex items-center mt-1">
+                        <User className="h-3 w-3 mr-1" /> {fii.owner || 'Geral'}
+                      </p>
+
+                      {/* ETIQUETA DE TIPO COLORIDA */}
                       {fii.fii_type && fii.fii_type !== 'Indefinido' && (
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded w-fit font-medium
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded w-fit font-medium mt-1
                             ${fii.fii_type === 'Tijolo' ? 'bg-orange-100 text-orange-700' : 
                               fii.fii_type === 'Papel' ? 'bg-blue-100 text-blue-700' : 
                               fii.fii_type === 'Fiagro' ? 'bg-green-100 text-green-700' :
@@ -85,6 +92,13 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
                           </div>
                       )}
                     </div>
+                  </TableCell>
+                  
+                  {/* INVESTIDOR NO DESKTOP: Coluna separada */}
+                  <TableCell className="hidden md:table-cell">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        {fii.owner || 'Geral'}
+                    </span>
                   </TableCell>
                   
                   <TableCell className="text-center">{quantity}</TableCell>
@@ -139,7 +153,7 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove }) => {
         </Table>
       </div>
 
-      {/* MODAL DE HISTÓRICO (Fica invisível até ser chamado) */}
+      {/* MODAL DE HISTÓRICO */}
       <HistoryModal 
         isOpen={historyOpen} 
         onClose={() => setHistoryOpen(false)} 
