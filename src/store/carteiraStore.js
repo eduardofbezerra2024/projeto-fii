@@ -1,21 +1,39 @@
 import { create } from 'zustand';
 import { PortfolioService } from '@/services/UserPortfolioService';
 
-// Função auxiliar de cálculo ATUALIZADA
+// --- FUNÇÃO DE CORREÇÃO (NOVA) ---
+// Transforma "R$ 33,34" ou "33,34" em 33.34 (número válido)
+const parseValue = (value) => {
+  if (typeof value === 'number') return value;
+  if (!value) return 0;
+  
+  // Converte para string, remove R$, espaços e pontos de milhar
+  let str = String(value).replace('R$', '').trim();
+  
+  // Se tiver vírgula, assume que é decimal: remove pontos de milhar e troca vírgula por ponto
+  if (str.includes(',')) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  }
+  
+  return parseFloat(str) || 0;
+};
+
+// Função auxiliar de cálculo
 const calculateMetrics = (portfolio) => {
   let totalInvested = 0;
   let currentValue = 0;
-  let totalDividends = 0; // <--- NOVO CONTADOR
+  let totalDividends = 0;
 
   portfolio.forEach(fii => {
-    const qty = Number(fii.quantity) || 0;
-    const pricePaid = Number(fii.price) || 0;
-    const currPrice = Number(fii.currentPrice) || pricePaid;
-    const dividend = Number(fii.last_dividend) || 0;
+    // Agora usamos parseValue para garantir que não venha NaN
+    const qty = parseValue(fii.quantity);
+    const pricePaid = parseValue(fii.price); 
+    const currPrice = parseValue(fii.currentPrice) || pricePaid; // Fallback se preço atual for 0
+    const dividend = parseValue(fii.last_dividend);
 
     totalInvested += pricePaid * qty;
     currentValue += currPrice * qty;
-    totalDividends += dividend * qty; // <--- SOMA AQUI (Valor x Quantidade)
+    totalDividends += dividend * qty;
   });
 
   const profitLoss = currentValue - totalInvested;
@@ -36,12 +54,16 @@ const useCarteiraStore = create((set, get) => ({
       const formatted = data.map(item => ({
         ...item,
         id: item.id,
-        price: Number(item.price),
-        quantity: Number(item.quantity),
-        currentPrice: Number(item.price),
-        last_dividend: Number(item.last_dividend) || 0,
+        // --- AQUI ESTAVA O ERRO ---
+        // Trocamos Number() por parseValue() para aceitar vírgulas
+        price: parseValue(item.price),
+        quantity: parseValue(item.quantity),
+        // Se currentPrice vier vazio, usa o preço pago inicialmente
+        currentPrice: parseValue(item.currentPrice) || parseValue(item.price),
+        last_dividend: parseValue(item.last_dividend),
+        // --------------------------
         fii_type: item.fii_type,
-        owner: item.owner || 'Geral' // Garante que o Dono venha do banco
+        owner: item.owner || 'Geral'
       }));
 
       set({ 
@@ -80,15 +102,13 @@ const useCarteiraStore = create((set, get) => ({
   updateFII: async (id, updatedData) => {
     try {
       const toUpdate = {};
+      // Usa parseValue aqui também para garantir que salve certo no banco se quiser
       if (updatedData.quantity) toUpdate.quantity = updatedData.quantity;
       if (updatedData.price) toUpdate.price = updatedData.price;
       if (updatedData.purchaseDate) toUpdate.purchase_date = updatedData.purchaseDate;
       if (updatedData.lastDividend) toUpdate.last_dividend = updatedData.lastDividend;
       if (updatedData.fiiType) toUpdate.fii_type = updatedData.fiiType;
-      
-      // --- ADICIONEI ISSO AQUI ---
       if (updatedData.owner) toUpdate.owner = updatedData.owner; 
-      // ---------------------------
 
       await PortfolioService.updateAsset(id, toUpdate);
       get().fetchPortfolio();
@@ -104,8 +124,8 @@ const useCarteiraStore = create((set, get) => ({
       if (updateData) {
         return {
           ...fii,
-          currentPrice: Number(updateData.currentPrice),
-          dividendYield: Number(updateData.dividendYield || 0), // Atualiza yield se vier
+          currentPrice: parseValue(updateData.currentPrice),
+          dividendYield: parseValue(updateData.dividendYield),
           lastUpdated: updateData.lastUpdated
         };
       }
