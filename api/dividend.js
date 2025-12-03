@@ -25,46 +25,53 @@ export default async function handler(req, res) {
     const html = await response.text();
     const $ = cheerio.load(html);
 
-    let lastDividend = 0;
-    let fundType = null; // Nova variável para guardar o tipo
+    // Objeto para guardar TUDO que encontrarmos
+    const fullData = {};
 
-    // Itera sobre todos os cartões de informação
+    // Itera sobre todos os cartões de informação da página
     $('div.cell').each((i, el) => {
         const descDiv = $(el).find('div.desc');
         const titleText = descDiv.find('span.name').text().trim().toUpperCase();
-        
-        // 1. Busca o Valor do Dividendo
-        if (titleText.includes('ÚLTIMO RENDIMENTO')) {
-            const valueSpan = descDiv.find('div.value > span');
-            const valueText = valueSpan.text().trim();
-            
-            if (valueText) {
-                const cleanValue = valueText.replace('R$', '').replace(/\s/g, '').replace(',', '.').trim();
-                const parsed = parseFloat(cleanValue);
-                if (!isNaN(parsed)) lastDividend = parsed;
-            }
-        }
+        const valueSpan = descDiv.find('div.value > span');
+        let valueText = valueSpan.text().trim();
 
-        // 2. Busca o Tipo do Fundo (NOVO)
-        if (titleText.includes('TIPO DE FUNDO')) {
-            const typeSpan = descDiv.find('div.value > span');
-            const typeText = typeSpan.text().trim().toUpperCase(); // Ex: "FUNDO DE PAPEL"
-            
-            if (typeText) {
-                fundType = typeText;
-            }
+        if (titleText && valueText) {
+            // Mapeia os títulos do site para chaves do nosso JSON
+            if (titleText.includes('RAZÃO SOCIAL')) fullData.razaoSocial = valueText;
+            if (titleText.includes('CNPJ')) fullData.cnpj = valueText;
+            if (titleText.includes('PÚBLICO-ALVO')) fullData.publicoAlvo = valueText;
+            if (titleText.includes('MANDATO')) fullData.mandato = valueText;
+            if (titleText.includes('SEGMENTO')) fullData.segmento = valueText;
+            if (titleText.includes('TIPO DE FUNDO')) fullData.tipoFundo = valueText;
+            if (titleText.includes('PRAZO DE DURAÇÃO')) fullData.prazo = valueText;
+            if (titleText.includes('TIPO DE GESTÃO')) fullData.gestao = valueText;
+            if (titleText.includes('TAXA DE ADMINISTRAÇÃO')) fullData.taxaAdm = valueText;
+            if (titleText.includes('VACÂNCIA')) fullData.vacancia = valueText;
+            if (titleText.includes('NÚMERO DE COTISTAS')) fullData.cotistas = valueText;
+            if (titleText.includes('COTAS EMITIDAS')) fullData.cotasEmitidas = valueText;
+            if (titleText.includes('VAL. PATRIMONIAL P/ COTA')) fullData.vpa = valueText;
+            if (titleText.includes('VALOR PATRIMONIAL')) fullData.valorPatrimonial = valueText;
+            if (titleText.includes('ÚLTIMO RENDIMENTO')) fullData.ultimoRendimento = valueText;
         }
     });
 
+    // Tratamento especial para números (para manter compatibilidade com o modal de adicionar)
+    let dividendNumber = 0;
+    if (fullData.ultimoRendimento) {
+        const clean = fullData.ultimoRendimento.replace('R$', '').replace(/\s/g, '').replace(',', '.');
+        dividendNumber = parseFloat(clean) || 0;
+    }
+
     return res.status(200).json({ 
-        dividend: lastDividend, 
-        fundType: fundType, // Retorna o tipo encontrado (ex: "FUNDO DE PAPEL")
         ticker: ticker.toUpperCase(),
-        source: 'Investidor10 (Scraper V6)' 
+        dividend: dividendNumber, // Mantemos esse para não quebrar o Modal de adicionar
+        fundType: fullData.tipoFundo, // Mantemos esse para não quebrar o Modal de adicionar
+        details: fullData, // AQUI ESTÁ O OURO: Todos os dados novos detalhados
+        source: 'Investidor10 (Scraper V7)' 
     });
 
   } catch (error) {
     console.error('Erro no Scraper:', error);
-    return res.status(200).json({ dividend: 0, fundType: null, source: 'Error', details: error.message });
+    return res.status(200).json({ dividend: 0, source: 'Error', details: error.message });
   }
 }

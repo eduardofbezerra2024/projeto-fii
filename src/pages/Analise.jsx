@@ -1,83 +1,85 @@
-import React, { useState, useEffect } from 'react';
-import { Helmet } from 'react-helmet';
-import { Search, Trash2, History, TrendingUp, DollarSign, Activity, RefreshCw, ExternalLink, Newspaper } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, Building2, Users, Wallet, BarChart3, FileText, Briefcase, Calendar, Percent, Newspaper } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getFiiQuote } from '@/services/fiiService';
-import { NewsService } from '@/services/NewsService'; // <--- Importamos o serviço de notícias
+import { NewsService } from '@/services/NewsService';
 import { toast } from '@/components/ui/use-toast';
+import { Helmet } from 'react-helmet';
+
+// Componente visual para cada "Card" de informação
+const InfoCard = ({ title, value, icon: Icon }) => (
+  <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between h-full hover:border-green-500/50 transition-colors">
+    <div className="flex items-center justify-between mb-2">
+      <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{title}</span>
+      {Icon && <Icon className="h-4 w-4 text-green-600 opacity-70" />}
+    </div>
+    <div className="text-lg font-bold text-gray-900 dark:text-white break-words">
+      {value || '-'}
+    </div>
+  </div>
+);
 
 const Analise = () => {
   const [ticker, setTicker] = useState('');
   const [loading, setLoading] = useState(false);
-  const [fiiData, setFiiData] = useState(null);
-  const [news, setNews] = useState([]); // <--- Estado para guardar as notícias
-  const [history, setHistory] = useState([]);
+  const [data, setData] = useState(null); // Dados básicos (Preço, Nome)
+  const [extraData, setExtraData] = useState(null); // Dados do Scraper (CNPJ, Vacância, etc)
+  const [news, setNews] = useState([]); // Notícias
 
-  // 1. Carregar histórico ao abrir
-  useEffect(() => {
-    const saved = localStorage.getItem('fii_search_history');
-    if (saved) {
-      setHistory(JSON.parse(saved));
-    }
-  }, []);
-
-  const addToHistory = (newTicker) => {
-    const upperTicker = newTicker.toUpperCase();
-    const newHistory = [upperTicker, ...history.filter(t => t !== upperTicker)].slice(0, 5);
-    setHistory(newHistory);
-    localStorage.setItem('fii_search_history', JSON.stringify(newHistory));
-  };
-
-  const clearHistory = () => {
-    setHistory([]);
-    localStorage.removeItem('fii_search_history');
-    toast({ description: "Histórico limpo." });
-  };
-
-  // FUNÇÃO PRINCIPAL DE BUSCA (ATUALIZADA)
-  const performSearch = async (code) => {
+  const handleSearch = async () => {
+    if (!ticker || ticker.length < 4) return;
     setLoading(true);
-    setFiiData(null);
-    setNews([]); // Limpa notícias antigas
+    setData(null);
+    setExtraData(null);
+    setNews([]);
 
     try {
-      // 1. Busca Dados Financeiros
-      const data = await getFiiQuote(code);
+      // 1. Busca dados básicos (Preço, Nome) da Brapi
+      const quote = await getFiiQuote(ticker.toUpperCase());
       
-      if (data) {
-        setFiiData(data);
-        addToHistory(code);
-
-        // 2. Busca Notícias (Só busca se achou o FII)
+      if (quote) {
+        setData(quote);
+        
+        // 2. Busca dados COMPLETOS do seu Scraper (Investidor10)
         try {
-          const recentNews = await NewsService.getRecentNews(code);
-          setNews(recentNews);
-        } catch (newsError) {
-          console.error("Erro ao buscar notícias:", newsError);
+            const response = await fetch(`/api/dividend?ticker=${ticker.toUpperCase()}`);
+            const result = await response.json();
+            if (result.details) {
+                setExtraData(result.details);
+            }
+        } catch (err) {
+            console.error("Erro ao buscar detalhes:", err);
+        }
+
+        // 3. Busca Notícias
+        try {
+            const newsItems = await NewsService.getRecentNews(ticker.toUpperCase());
+            setNews(newsItems);
+        } catch (err) {
+            console.error("Erro ao buscar notícias:", err);
         }
 
       } else {
-        toast({ variant: "destructive", title: "Não encontrado", description: "Verifique o código do FII." });
+        toast({ title: "Não encontrado", description: "Verifique o código do ativo.", variant: "destructive" });
       }
     } catch (error) {
       console.error(error);
-      toast({ variant: "destructive", title: "Erro", description: "Falha ao buscar dados." });
+      toast({ title: "Erro", description: "Falha na busca.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = (e) => {
-    if (e) e.preventDefault();
-    if (!ticker || ticker.length < 4) return;
-    performSearch(ticker.toUpperCase());
-  };
-
-  const handleHistoryClick = (histTicker) => {
-    setTicker(histTicker);
-    performSearch(histTicker);
+  // Função auxiliar para calcular P/VP se tivermos os dados
+  const calculatePVP = () => {
+      if (data?.price && extraData?.vpa) {
+          const vpaValue = parseFloat(extraData.vpa.replace('R$','').replace(/\s/g, '').replace(',','.').trim());
+          if (!isNaN(vpaValue) && vpaValue > 0) {
+              return (data.price / vpaValue).toFixed(2);
+          }
+      }
+      return '-';
   };
 
   return (
@@ -86,127 +88,107 @@ const Analise = () => {
         <title>Análise de FIIs - FII Analyzer</title>
       </Helmet>
 
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Análise de FIIs</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Dados financeiros e notícias em tempo real</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Análise Fundamentalista</h1>
+          <p className="text-gray-600 dark:text-gray-400">Dados detalhados e notícias em tempo real</p>
         </div>
 
-        {/* Área de Busca */}
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
-          <form onSubmit={handleSearch} className="flex gap-4">
-            <Input 
-              placeholder="Digite o ticker (ex: HGLG11)" 
-              value={ticker}
-              onChange={(e) => setTicker(e.target.value.toUpperCase())}
-              className="flex-1 uppercase"
-            />
-            <Button type="submit" className="bg-green-600 hover:bg-green-700" disabled={loading}>
-              {loading ? <RefreshCw className="h-4 w-4 animate-spin mr-2"/> : <Search className="h-4 w-4 mr-2" />}
-              Buscar
-            </Button>
-          </form>
-
-          {history.length > 0 && (
-            <div className="mt-4 flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-gray-500 flex items-center gap-1">
-                <History className="h-3 w-3" /> Recentes:
-              </span>
-              {history.map((histTicker) => (
-                <Button 
-                  key={histTicker}
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => handleHistoryClick(histTicker)}
-                  className="text-xs h-7 bg-gray-50 hover:bg-green-50 hover:text-green-700 border-gray-200"
-                >
-                  {histTicker}
-                </Button>
-              ))}
-              <Button variant="ghost" size="sm" onClick={clearHistory} className="text-xs h-7 text-red-400 hover:bg-red-50">
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          )}
+        {/* Barra de Busca */}
+        <div className="flex gap-2 max-w-lg">
+          <Input 
+            placeholder="Digite o ticker (ex: MXRF11)" 
+            value={ticker}
+            onChange={(e) => setTicker(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            className="uppercase text-lg"
+          />
+          <Button onClick={handleSearch} disabled={loading} className="bg-green-600 hover:bg-green-700 w-32">
+            {loading ? '...' : <Search className="h-5 w-5" />}
+          </Button>
         </div>
 
-        {/* Resultados */}
-        {fiiData && (
+        {/* RESULTADOS */}
+        {data && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             
-            {/* 1. Cabeçalho e Preço */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            {/* Cabeçalho do Fundo */}
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
-                <h2 className="text-4xl font-bold text-gray-900 dark:text-white">{fiiData.name?.split(' ')[0] || ticker}</h2>
-                <p className="text-gray-500">{fiiData.name}</p>
+                <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{data.name}</h2>
+                <div className="flex items-center gap-2 mt-2">
+                    <span className="px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm font-bold text-gray-700 dark:text-gray-200">{ticker.toUpperCase()}</span>
+                    <span className="text-gray-500 dark:text-gray-400">{data.sector}</span>
+                </div>
               </div>
-              <div className="text-right bg-green-50 dark:bg-green-900/20 px-6 py-3 rounded-xl border border-green-100 dark:border-green-900/30">
-                <p className="text-sm text-gray-500 dark:text-gray-400">Cotação Atual</p>
-                <p className="text-3xl font-bold text-green-700 dark:text-green-400">
-                  R$ {fiiData.price?.toFixed(2)}
-                </p>
+              <div className="text-right">
+                <p className="text-sm text-gray-500 dark:text-gray-400 uppercase font-bold">Cotação Atual</p>
+                <p className="text-4xl font-bold text-green-600">R$ {data.price.toFixed(2)}</p>
               </div>
             </div>
 
-            {/* 2. Grid de Indicadores */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Setor</CardTitle></CardHeader>
-                <CardContent><div className="text-lg font-bold">{fiiData.sector}</div></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">P/VP</CardTitle></CardHeader>
-                <CardContent><div className="text-lg font-bold">{(fiiData.price / (fiiData.vpa || 1)).toFixed(2)}</div></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Dividend Yield (12m)</CardTitle></CardHeader>
-                <CardContent><div className="text-lg font-bold text-green-600">{fiiData.dividendYield ? `${fiiData.dividendYield.toFixed(2)}%` : '-'}</div></CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2"><CardTitle className="text-sm text-gray-500">Valor Patrimonial</CardTitle></CardHeader>
-                <CardContent><div className="text-lg font-bold">R$ {fiiData.vpa?.toFixed(2)}</div></CardContent>
-              </Card>
-            </div>
+            {/* GRADE DE INFORMAÇÕES COMPLETAS (ESTILO INVESTIDOR10) */}
+            {extraData ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {/* Linha 1 - Principais */}
+                    <InfoCard title="Último Rendimento" value={extraData.ultimoRendimento} icon={Wallet} />
+                    <InfoCard title="Valor Patrimonial" value={extraData.valorPatrimonial} icon={Building2} />
+                    <InfoCard title="VPA (Valor por Cota)" value={extraData.vpa} icon={BarChart3} />
+                    <InfoCard title="P/VP" value={calculatePVP()} icon={Percent} />
 
-            {/* 3. SEÇÃO DE NOTÍCIAS (NOVO) */}
-            <div>
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
-                <Newspaper className="h-5 w-5 mr-2 text-blue-600" />
-                Últimas Notícias sobre {ticker}
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Linha 2 - Estrutura */}
+                    <InfoCard title="Cotistas" value={extraData.cotistas} icon={Users} />
+                    <InfoCard title="Cotas Emitidas" value={extraData.cotasEmitidas} icon={FileText} />
+                    <InfoCard title="Liquidez Diária" value={data.liquidity || '-'} icon={BarChart3} />
+                    <InfoCard title="Vacância" value={extraData.vacancia} icon={Building2} />
+
+                    {/* Linha 3 - Qualitativo */}
+                    <InfoCard title="Tipo de Fundo" value={extraData.tipoFundo} icon={Briefcase} />
+                    <InfoCard title="Segmento" value={extraData.segmento} icon={Briefcase} />
+                    <InfoCard title="Gestão" value={extraData.gestao} icon={Users} />
+                    <InfoCard title="Mandato" value={extraData.mandato} icon={FileText} />
+
+                    {/* Linha 4 - Detalhes */}
+                    <InfoCard title="CNPJ" value={extraData.cnpj} icon={FileText} />
+                    <InfoCard title="Prazo" value={extraData.prazo} icon={Calendar} />
+                    <div className="col-span-1 sm:col-span-2">
+                        <InfoCard title="Taxa de Administração" value={extraData.taxaAdm} icon={Percent} />
+                    </div>
+                </div>
+            ) : (
+                <div className="text-center py-10 text-gray-500 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+                    Carregando indicadores detalhados...
+                </div>
+            )}
+
+            {/* SEÇÃO DE NOTÍCIAS */}
+            <div className="mt-8">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+                    <Newspaper className="h-5 w-5 mr-2 text-blue-600" />
+                    Últimas Notícias sobre {ticker.toUpperCase()}
+                </h3>
+                
                 {news.length > 0 ? (
-                  news.map((item, index) => (
-                    <a 
-                      key={index} 
-                      href={item.link} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="block group"
-                    >
-                      <Card className="h-full hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
-                        <CardContent className="p-4">
-                          <h4 className="font-semibold text-gray-800 dark:text-gray-200 group-hover:text-blue-600 line-clamp-2 mb-2">
-                            {item.title}
-                          </h4>
-                          <div className="flex justify-between items-center text-xs text-gray-500">
-                            <span>{item.source}</span>
-                            <span className="flex items-center">
-                              {new Date(item.date).toLocaleDateString()} 
-                              <ExternalLink className="h-3 w-3 ml-1" />
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </a>
-                  ))
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {news.map((item, index) => (
+                            <a 
+                                key={index} 
+                                href={item.link} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="block p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow hover:border-blue-300"
+                            >
+                                <h4 className="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">{item.title}</h4>
+                                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                                    <span>{item.source}</span>
+                                    <span>{new Date(item.date).toLocaleDateString()}</span>
+                                </div>
+                            </a>
+                        ))}
+                    </div>
                 ) : (
-                  <div className="col-span-2 text-center py-8 bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
-                    <p className="text-gray-500">Nenhuma notícia recente encontrada para este fundo.</p>
-                  </div>
+                    <p className="text-gray-500 dark:text-gray-400 italic">Nenhuma notícia recente encontrada.</p>
                 )}
-              </div>
             </div>
 
           </div>
