@@ -39,8 +39,9 @@ const useCarteiraStore = create((set, get) => ({
         price: Number(item.price),
         quantity: Number(item.quantity),
         currentPrice: Number(item.price),
-        last_dividend: Number(item.last_dividend) || 0, // Garante que venha do banco
-        fii_type: item.fii_type 
+        last_dividend: Number(item.last_dividend) || 0,
+        fii_type: item.fii_type,
+        owner: item.owner || 'Geral' // Garante que o Dono venha do banco
       }));
 
       set({ 
@@ -68,8 +69,8 @@ const useCarteiraStore = create((set, get) => ({
       await PortfolioService.removeAsset(id);
       const newPortfolio = get().portfolio.filter((fii) => fii.id !== id);
       set({ 
-        portfolio: newPortfolio,
-        metrics: calculateMetrics(newPortfolio)
+        portfolio: newPortfolio, 
+        metrics: calculateMetrics(newPortfolio) 
       });
     } catch (error) {
       console.error("Erro ao remover:", error);
@@ -84,6 +85,10 @@ const useCarteiraStore = create((set, get) => ({
       if (updatedData.purchaseDate) toUpdate.purchase_date = updatedData.purchaseDate;
       if (updatedData.lastDividend) toUpdate.last_dividend = updatedData.lastDividend;
       if (updatedData.fiiType) toUpdate.fii_type = updatedData.fiiType;
+      
+      // --- ADICIONEI ISSO AQUI ---
+      if (updatedData.owner) toUpdate.owner = updatedData.owner; 
+      // ---------------------------
 
       await PortfolioService.updateAsset(id, toUpdate);
       get().fetchPortfolio();
@@ -100,8 +105,7 @@ const useCarteiraStore = create((set, get) => ({
         return {
           ...fii,
           currentPrice: Number(updateData.currentPrice),
-          // Se a atualização trouxer dividendo novo, usa. Senão mantém o manual.
-          // last_dividend: updateData.dividendYield ? ... (Lógica futura)
+          dividendYield: Number(updateData.dividendYield || 0), // Atualiza yield se vier
           lastUpdated: updateData.lastUpdated
         };
       }
