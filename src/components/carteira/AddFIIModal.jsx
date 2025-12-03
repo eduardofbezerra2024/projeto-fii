@@ -45,16 +45,30 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     setFiiData(null);
   };
 
+  // Função para converter o texto do site para as opções do nosso select
+  const mapFundType = (rawType) => {
+    if (!rawType) return null;
+    const type = rawType.toUpperCase();
+    
+    if (type.includes('PAPEL')) return 'Papel';
+    if (type.includes('TIJOLO')) return 'Tijolo';
+    if (type.includes('FIAGRO')) return 'Fiagro';
+    if (type.includes('INFRA')) return 'Infra';
+    if (type.includes('HÍBRIDO') || type.includes('MISTO') || type.includes('HIBRIDO')) return 'Hibrido';
+    
+    return 'Outros';
+  };
+
   const handleSearchTicker = async () => {
     if (!ticker || ticker.length < 4) return;
     if (isSearching) return;
 
     setIsSearching(true);
     setFiiData(null);
-    setLastDividend(''); // Limpa o dividendo anterior antes de buscar
+    setLastDividend('');
 
     try {
-      // 1. Busca Preço e Nome (Brapi/API existente)
+      // 1. Busca Preço e Nome (Brapi)
       const quote = await getFiiQuote(ticker.toUpperCase());
       
       if (quote) {
@@ -69,21 +83,33 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
           toast({ description: `Preço atual: R$ ${quote.price}` });
         }
 
-        // 2. NOVO: Busca o Último Dividendo (Sua API Scraper)
+        // 2. Busca Último Dividendo E Tipo (Sua API Scraper)
         try {
             const divResponse = await fetch(`/api/dividend?ticker=${ticker.toUpperCase()}`);
             const divData = await divResponse.json();
             
+            // Preenche Dividendo
             if (divData.dividend) {
                 setLastDividend(divData.dividend);
-                toast({ 
-                    description: `Último rendimento encontrado: R$ ${divData.dividend}`,
+            }
+
+            // Preenche Tipo do Fundo (Automático)
+            if (divData.fundType) {
+                const mappedType = mapFundType(divData.fundType);
+                if (mappedType) {
+                    setFiiType(mappedType);
+                }
+            }
+
+            if (divData.dividend || divData.fundType) {
+                 toast({ 
+                    description: `Dados carregados! Rendimento: R$ ${divData.dividend} | Tipo: ${divData.fundType}`,
                     duration: 3000
                 });
             }
+
         } catch (divError) {
-            console.error("Erro ao buscar dividendos:", divError);
-            // Não bloqueia o fluxo se falhar o dividendo, apenas deixa o campo vazio para preencher manual
+            console.error("Erro ao buscar dados extras:", divError);
         }
 
       } else {
@@ -164,12 +190,12 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                     <Label className="text-blue-600">Último Provento</Label>
                     {ticker.length >= 4 && (
                         <a 
-                            href={`https://statusinvest.com.br/fundos-imobiliarios/${ticker.toLowerCase()}`} 
+                            href={`https://investidor10.com.br/fiis/${ticker.toLowerCase()}`} 
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-[10px] text-gray-400 hover:text-blue-500 flex items-center gap-1 cursor-pointer"
                         >
-                            Ver valor <ExternalLink className="h-3 w-3" />
+                            Ver fonte <ExternalLink className="h-3 w-3" />
                         </a>
                     )}
                 </div>
@@ -179,7 +205,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                         step="0.01" 
                         value={lastDividend} 
                         onChange={(e) => setLastDividend(e.target.value)} 
-                        placeholder="Buscando..." 
+                        placeholder="0.00" 
                         className={isSearching ? "opacity-50" : ""}
                     />
                     <Coins className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
