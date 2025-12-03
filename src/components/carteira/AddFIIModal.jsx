@@ -53,7 +53,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
     setFiiData(null);
 
     try {
-      // Busca apenas o preço na API oficial (Brapi) que é rápida e confiável
       const quote = await getFiiQuote(ticker.toUpperCase());
       
       if (quote) {
@@ -100,13 +99,12 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="w-[95vw] max-w-[500px] rounded-xl"> {/* Ajuste para celular */}
         <DialogHeader>
           <DialogTitle>{editingFII ? 'Editar Ativo' : 'Adicionar à Carteira'}</DialogTitle>
         </DialogHeader>
         
         <div className="grid gap-4 py-4">
-          {/* Ticker */}
           <div className="grid gap-2">
             <Label htmlFor="ticker">Ticker</Label>
             <div className="flex gap-2">
@@ -117,7 +115,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 onBlur={handleSearchTicker}
                 placeholder="Ex: MXRF11"
                 disabled={!!editingFII}
-                className="uppercase"
+                className="uppercase text-lg font-bold" // Letra maior no celular
               />
               {!editingFII && (
                 <Button type="button" onClick={handleSearchTicker} disabled={isSearching} size="icon" variant="outline">
@@ -128,18 +126,18 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
             {fiiData && <p className="text-xs text-green-600 font-medium">✅ {fiiData.name}</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div><Label>Quantidade</Label><Input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></div>
-            <div><Label>Preço Pago (R$)</Label><Input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+          {/* NO CELULAR: 1 Coluna | NO PC: 2 Colunas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div><Label>Quantidade</Label><Input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="text-lg" /></div>
+            <div><Label>Preço Pago (R$)</Label><Input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="text-lg" /></div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
                 <Label>Data Compra</Label>
                 <Input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
             </div>
             
-            {/* Campo de Dividendo com Link de Ajuda */}
             <div>
                 <div className="flex justify-between items-center mb-1">
                     <Label className="text-blue-600">Último Provento</Label>
@@ -149,7 +147,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                             target="_blank" 
                             rel="noopener noreferrer"
                             className="text-[10px] text-gray-400 hover:text-blue-500 flex items-center gap-1 cursor-pointer"
-                            title="Ver no Status Invest"
                         >
                             Ver valor <ExternalLink className="h-3 w-3" />
                         </a>
@@ -186,9 +183,9 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700">Salvar</Button>
+        <DialogFooter className="flex-col gap-2 sm:flex-row">
+          <Button onClick={handleSave} className="bg-green-600 hover:bg-green-700 w-full sm:w-auto h-12 text-lg">Salvar</Button>
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto mt-2 sm:mt-0">Cancelar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
