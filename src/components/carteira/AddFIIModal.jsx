@@ -51,8 +51,10 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
 
     setIsSearching(true);
     setFiiData(null);
+    setLastDividend(''); // Limpa o dividendo anterior antes de buscar
 
     try {
+      // 1. Busca Preço e Nome (Brapi/API existente)
       const quote = await getFiiQuote(ticker.toUpperCase());
       
       if (quote) {
@@ -66,11 +68,30 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
           setPrice(quote.price);
           toast({ description: `Preço atual: R$ ${quote.price}` });
         }
+
+        // 2. NOVO: Busca o Último Dividendo (Sua API Scraper)
+        try {
+            const divResponse = await fetch(`/api/dividend?ticker=${ticker.toUpperCase()}`);
+            const divData = await divResponse.json();
+            
+            if (divData.dividend) {
+                setLastDividend(divData.dividend);
+                toast({ 
+                    description: `Último rendimento encontrado: R$ ${divData.dividend}`,
+                    duration: 3000
+                });
+            }
+        } catch (divError) {
+            console.error("Erro ao buscar dividendos:", divError);
+            // Não bloqueia o fluxo se falhar o dividendo, apenas deixa o campo vazio para preencher manual
+        }
+
       } else {
         toast({ variant: "destructive", title: "Fundo não encontrado." });
       }
     } catch (error) {
       console.error(error);
+      toast({ variant: "destructive", title: "Erro ao buscar dados." });
     } finally {
       setIsSearching(false);
     }
@@ -99,7 +120,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] max-w-[500px] rounded-xl"> {/* Ajuste para celular */}
+      <DialogContent className="w-[95vw] max-w-[500px] rounded-xl">
         <DialogHeader>
           <DialogTitle>{editingFII ? 'Editar Ativo' : 'Adicionar à Carteira'}</DialogTitle>
         </DialogHeader>
@@ -113,9 +134,10 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
                 onBlur={handleSearchTicker}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearchTicker()}
                 placeholder="Ex: MXRF11"
                 disabled={!!editingFII}
-                className="uppercase text-lg font-bold" // Letra maior no celular
+                className="uppercase text-lg font-bold"
               />
               {!editingFII && (
                 <Button type="button" onClick={handleSearchTicker} disabled={isSearching} size="icon" variant="outline">
@@ -126,7 +148,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
             {fiiData && <p className="text-xs text-green-600 font-medium">✅ {fiiData.name}</p>}
           </div>
 
-          {/* NO CELULAR: 1 Coluna | NO PC: 2 Colunas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div><Label>Quantidade</Label><Input type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="text-lg" /></div>
             <div><Label>Preço Pago (R$)</Label><Input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} className="text-lg" /></div>
@@ -158,7 +179,8 @@ const AddFIIModal = ({ isOpen, onClose, onSave, editingFII }) => {
                         step="0.01" 
                         value={lastDividend} 
                         onChange={(e) => setLastDividend(e.target.value)} 
-                        placeholder="0.00" 
+                        placeholder="Buscando..." 
+                        className={isSearching ? "opacity-50" : ""}
                     />
                     <Coins className="absolute right-3 top-2.5 h-4 w-4 text-gray-400" />
                 </div>
