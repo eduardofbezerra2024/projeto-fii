@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatCurrency } from '@/utils/formatters';
 import HistoryModal from './HistoryModal';
-import SellFIIModal from './SellFIIModal'; // <--- IMPORT NOVO
+import SellFIIModal from './SellFIIModal';
 
 const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
   // Estados para Modais
@@ -66,7 +66,6 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
               </div>
               <span className="text-xs text-gray-500">{fii.sector}</span>
               
-              {/* Mostra Investidor no Mobile */}
               <p className="text-[10px] text-blue-600 font-medium flex items-center mt-1">
                 <User className="h-3 w-3 mr-1" /> {fii.owner || 'Geral'}
               </p>
@@ -78,16 +77,18 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
                 <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleOpenSell(fii)} className="text-blue-600 font-medium">
-                  <DollarSign className="mr-2 h-4 w-4" /> Vender
+                {/* --- MUDANÇA VISUAL NO MOBILE: Cor mais forte --- */}
+                <DropdownMenuItem onClick={() => handleOpenSell(fii)} className="text-emerald-600 font-semibold focus:text-emerald-700 focus:bg-emerald-50">
+                  <DollarSign className="mr-2 h-4 w-4" /> Vender Ativo
                 </DropdownMenuItem>
+                {/* -------------------------------------------------- */}
                 <DropdownMenuItem onClick={() => handleOpenHistory(fii.ticker)}>
                   <Clock className="mr-2 h-4 w-4" /> Histórico
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onEdit(fii)}>
                   <Edit className="mr-2 h-4 w-4" /> Editar
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onRemove(fii.id)} className="text-red-600">
+                <DropdownMenuItem onClick={() => onRemove(fii.id)} className="text-red-600 focus:text-red-700 focus:bg-red-50">
                   <Trash2 className="mr-2 h-4 w-4" /> Excluir
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -220,23 +221,31 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
                   </TableCell>
                   
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      {/* BOTÃO DE VENDER (NOVO) */}
+                    <div className="flex justify-end items-center gap-2">
+                      
+                      {/* --- MUDANÇA VISUAL NO DESKTOP: Botão de Venda Destacado --- */}
                       <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        title="Vender Ativo"
+                        size="sm" // Tamanho pequeno
                         onClick={() => handleOpenSell(fii)}
-                        className="text-emerald-600 hover:bg-emerald-50"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center gap-1 px-2"
+                        title="Vender Ativo"
                       >
-                        <DollarSign className="h-4 w-4" />
+                        <DollarSign className="h-3.5 w-3.5" />
+                        <span className="hidden lg:inline">Vender</span> {/* Texto aparece em telas grandes */}
                       </Button>
+                      {/* ----------------------------------------------------------- */}
 
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenHistory(fii.ticker)}>
-                        <Clock className="h-4 w-4 text-blue-500" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => onEdit(fii)}><Edit className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => onRemove(fii.id)} className="text-red-500 hover:bg-red-50"><Trash2 className="h-4 w-4" /></Button>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenHistory(fii.ticker)} title="Histórico">
+                            <Clock className="h-4 w-4 text-blue-500" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => onEdit(fii)} title="Editar">
+                            <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => onRemove(fii.id)} className="text-red-500 hover:bg-red-50" title="Excluir">
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -248,11 +257,10 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
 
       <HistoryModal isOpen={historyOpen} onClose={() => setHistoryOpen(false)} ticker={selectedTicker} />
       
-      {/* MODAL DE VENDA */}
       <SellFIIModal 
         isOpen={sellModalOpen} 
         onClose={() => setSellModalOpen(false)} 
-        onConfirm={onSell} // <--- Chama a função do pai
+        onConfirm={onSell}
         asset={assetToSell}
       />
     </>
