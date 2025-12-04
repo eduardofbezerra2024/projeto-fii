@@ -111,6 +111,7 @@ const useCarteiraStore = create((set, get) => ({
       });
     } catch (error) {
       console.error("Erro ao remover:", error);
+      throw error; // <--- AGORA SIM! Joga o erro para a tela ver.
     }
   },
 
