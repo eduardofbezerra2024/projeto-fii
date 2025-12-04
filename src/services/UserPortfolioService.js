@@ -139,12 +139,9 @@ export const PortfolioService = {
     
     if (error) throw error;
     return data;
-  }
-};
+  },
 
-// ... outras funções ...
-
-  // NOVA FUNÇÃO: VENDER ATIVO
+  // 6. VENDER ATIVO (NOVA FUNÇÃO)
   async sellAsset(ticker, quantityToSell, sellPrice, date) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Login necessário');
@@ -167,7 +164,6 @@ export const PortfolioService = {
     const qty = Number(quantityToSell);
 
     // 2. Calcular Lucro/Prejuízo dessa operação
-    // Fórmula: (Preço Venda - Preço Médio Compra) * Quantidade
     const profit = (saleValue - avgPrice) * qty;
 
     // 3. Salvar no Histórico de Lucros Realizados (Relatório)
@@ -209,4 +205,5 @@ export const PortfolioService = {
     }
 
     return { profit };
-  },
+  }
+};
