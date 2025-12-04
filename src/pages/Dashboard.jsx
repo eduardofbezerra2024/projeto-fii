@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
 import { Helmet } from 'react-helmet';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { Wallet, TrendingUp, PieChart as PieIcon, DollarSign, Coins } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import useCarteiraStore from '@/store/carteiraStore';
@@ -13,7 +13,7 @@ const Dashboard = () => {
     fetchPortfolio();
   }, [fetchPortfolio]);
 
-  // 1. DADOS POR TIPO (Setores)
+  // 1. DADOS POR TIPO (Setores - Pizza Esquerda)
   const sectorData = useMemo(() => {
     if (!portfolio.length) return [];
     const distribution = portfolio.reduce((acc, item) => {
@@ -29,7 +29,7 @@ const Dashboard = () => {
     })).sort((a, b) => b.value - a.value);
   }, [portfolio]);
 
-  // 2. DADOS POR ATIVO (Qual FII pesa mais na carteira?)
+  // 2. DADOS POR ATIVO (Ativos - Pizza Direita)
   const assetsData = useMemo(() => {
     if (!portfolio.length) return [];
     return portfolio.map(item => ({
@@ -38,13 +38,15 @@ const Dashboard = () => {
     })).sort((a, b) => b.value - a.value);
   }, [portfolio]);
 
-  // Cores fixas para Tipos
+  // 3. DADOS DE EVOLUÇÃO (Barra - Embaixo)
+  const currentMonth = new Date().toLocaleString('pt-BR', { month: 'short' });
+  const evolutionData = [{ name: currentMonth, valor: metrics.currentValue }];
+
+  // Cores
   const COLORS_TYPE = {
     'Tijolo': '#f97316', 'Papel': '#3b82f6', 'Fiagro': '#22c55e',
     'Infra': '#a855f7', 'Hibrido': '#eab308', 'Outros': '#94a3b8', 'Indefinido': '#cbd5e1'
   };
-
-  // Cores dinâmicas para Ativos (uma lista bonita para ir pegando)
   const COLORS_ASSETS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1'];
 
   return (
@@ -59,7 +61,7 @@ const Dashboard = () => {
           <p className="text-gray-600 dark:text-gray-400 mt-1">Visão geral da sua carteira</p>
         </div>
 
-        {/* CARDS DE RESUMO */}
+        {/* --- CARDS DE RESUMO --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -106,25 +108,17 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* GRÁFICOS */}
+        {/* --- LINHA DOS GRÁFICOS DE PIZZA --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           
-          {/* GRÁFICO 1: SETORES (Tipos) */}
-          <Card className="col-span-1">
+          {/* Gráfico 1: Setores */}
+          <Card>
             <CardHeader><CardTitle>Diversificação por Setor</CardTitle></CardHeader>
             <CardContent className="h-[300px]">
               {portfolio.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={sectorData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
+                    <Pie data={sectorData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                       {sectorData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS_TYPE[entry.name] || COLORS_TYPE['Outros']} />
                       ))}
@@ -134,42 +128,50 @@ const Dashboard = () => {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-400 text-sm">Adicione ativos para ver o gráfico</div>
+                <div className="h-full flex items-center justify-center text-gray-400 text-sm">Sem dados</div>
               )}
             </CardContent>
           </Card>
 
-          {/* GRÁFICO 2: ATIVOS (Peso na Carteira) */}
-          <Card className="col-span-1">
+          {/* Gráfico 2: Ativos */}
+          <Card>
             <CardHeader><CardTitle>Peso dos Ativos</CardTitle></CardHeader>
             <CardContent className="h-[300px]">
               {portfolio.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie
-                      data={assetsData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={0} // Pizza cheia para diferenciar
-                      outerRadius={80}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
+                    <Pie data={assetsData} cx="50%" cy="50%" innerRadius={0} outerRadius={80} paddingAngle={2} dataKey="value">
                       {assetsData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS_ASSETS[index % COLORS_ASSETS.length]} />
                       ))}
                     </Pie>
                     <Tooltip formatter={(value) => formatCurrency(value)} />
-                    <Legend layout="vertical" align="right" verticalAlign="middle" />
+                    <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{fontSize: '12px'}} />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-400 text-sm">Carteira vazia</div>
+                <div className="h-full flex items-center justify-center text-gray-400 text-sm">Sem dados</div>
               )}
             </CardContent>
           </Card>
-
         </div>
+
+        {/* --- LINHA DO GRÁFICO DE BARRAS (EVOLUÇÃO) --- */}
+        <Card>
+            <CardHeader><CardTitle>Evolução Patrimonial</CardTitle></CardHeader>
+            <CardContent className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={evolutionData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                  <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `R$ ${value}`} />
+                  <Tooltip formatter={(value) => formatCurrency(value)} />
+                  <Bar dataKey="valor" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={60} />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+        </Card>
+
       </div>
     </>
   );
