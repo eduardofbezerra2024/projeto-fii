@@ -125,6 +125,23 @@ const useCarteiraStore = create((set, get) => ({
     }
   },
 
+  // --- 🔴 NOVA FUNÇÃO DE VENDA ADICIONADA AQUI ---
+  sellFII: async (ticker, quantity, price, date) => {
+    try {
+      // Chama o serviço do Supabase
+      await PortfolioService.sellAsset(ticker, quantity, price, date);
+      
+      // Recarrega a carteira para atualizar o saldo e os lucros
+      get().fetchPortfolio();
+      
+    } catch (error) {
+      console.error("Erro ao vender:", error);
+      // Repassa o erro para que a tela (Carteira.jsx) possa mostrar o Toast de erro
+      throw error;
+    }
+  },
+  // -----------------------------------------------
+
   updateYields: (updates) => set((state) => {
     const newPortfolio = state.portfolio.map((fii) => {
       const updateData = updates.find((u) => u.id === fii.id);

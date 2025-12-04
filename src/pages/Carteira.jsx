@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Helmet } from 'react-helmet';
-import { Plus, RefreshCw, Clock, Percent, Coins } from 'lucide-react'; // Removed Grid, List
+import { Plus, RefreshCw, Clock, Percent, Coins } from 'lucide-react'; 
 import { Button } from '@/components/ui/button';
 import CarteiraTable from '@/components/carteira/CarteiraTable';
-// FIICard import removed as it's now handled inside CarteiraTable for mobile
 import AddFIIModal from '@/components/carteira/AddFIIModal';
 import { formatCurrency } from '@/utils/formatters';
 import { toast } from '@/components/ui/use-toast';
@@ -17,6 +16,7 @@ const Carteira = () => {
     addFII, 
     updateFII, 
     removeFII, 
+    sellFII, // <--- 1. ADICIONADO AQUI
     fetchPortfolio,
     updateYields,
     isLoading 
@@ -74,6 +74,27 @@ const Carteira = () => {
     await removeFII(id);
     toast({ title: 'Sucesso', description: 'FII removido da carteira' });
   };
+
+  // --- 2. FUNÇÃO DE VENDA CRIADA AQUI ---
+  const handleSellFII = async (saleData) => {
+    try {
+      // O Modal devolve um objeto { ticker, quantity, price, date }
+      await sellFII(saleData.ticker, saleData.quantity, saleData.price, saleData.date);
+      
+      toast({ 
+        title: 'Venda Realizada', 
+        description: `Venda de ${saleData.quantity} cotas de ${saleData.ticker} registrada com sucesso.` 
+      });
+    } catch (error) {
+      console.error(error);
+      toast({ 
+        title: "Erro na venda", 
+        description: error.message || "Não foi possível realizar a venda.", 
+        variant: "destructive" 
+      });
+    }
+  };
+  // -------------------------------------
 
   const handleRefreshYields = async () => {
     if (isUpdating) return;
@@ -137,8 +158,6 @@ const Carteira = () => {
               <span className="sm:hidden">Atualizar</span>
               <span className="hidden sm:inline">{isUpdating ? 'Atualizando...' : 'Atualizar Yields'}</span>
             </Button>
-
-            {/* Removed Grid/List buttons as responsiveness is now built-in */}
             
             <Button onClick={handleAddFII} className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-none">
               <Plus className="h-5 w-5 mr-2" />
@@ -181,11 +200,12 @@ const Carteira = () => {
         {/* Lógica de Exibição Simplificada */}
         {portfolio.length > 0 ? (
             <div className="overflow-x-auto">
-                {/* O CarteiraTable agora decide sozinho se mostra Tabela ou Cards */}
+                {/* 3. PROPRIEDADE onSell PASSADA AQUI 👇 */}
                 <CarteiraTable
-                portfolio={portfolio}
-                onEdit={handleEditFII}
-                onRemove={handleRemoveFII}
+                  portfolio={portfolio}
+                  onEdit={handleEditFII}
+                  onRemove={handleRemoveFII}
+                  onSell={handleSellFII} 
                 />
             </div>
         ) : (
