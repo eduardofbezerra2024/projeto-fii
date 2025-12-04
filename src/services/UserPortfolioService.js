@@ -141,3 +141,72 @@ export const PortfolioService = {
     return data;
   }
 };
+
+// ... outras funções ...
+
+  // NOVA FUNÇÃO: VENDER ATIVO
+  async sellAsset(ticker, quantityToSell, sellPrice, date) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Login necessário');
+
+    // 1. Buscar a posição atual para ver preço médio e saldo
+    const { data: position } = await supabase
+      .from('user_portfolio')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('ticker', ticker)
+      .single();
+
+    if (!position || Number(position.quantity) < Number(quantityToSell)) {
+        throw new Error('Saldo insuficiente para venda.');
+    }
+
+    const currentQty = Number(position.quantity);
+    const avgPrice = Number(position.price); // Esse é o seu preço médio de compra
+    const saleValue = Number(sellPrice);
+    const qty = Number(quantityToSell);
+
+    // 2. Calcular Lucro/Prejuízo dessa operação
+    // Fórmula: (Preço Venda - Preço Médio Compra) * Quantidade
+    const profit = (saleValue - avgPrice) * qty;
+
+    // 3. Salvar no Histórico de Lucros Realizados (Relatório)
+    await supabase.from('closed_positions').insert({
+        user_id: user.id,
+        ticker: ticker,
+        quantity: qty,
+        avg_price_buy: avgPrice,
+        price_sell: saleValue,
+        profit_loss: profit,
+        date: date || new Date()
+    });
+
+    // 4. Registrar a Transação no Histórico Geral
+    await supabase.from('portfolio_transactions').insert({
+        user_id: user.id,
+        ticker: ticker,
+        quantity: qty,
+        price: saleValue,
+        date: date || new Date(),
+        type: 'sell' // Importante: Marca como venda
+    });
+
+    // 5. Atualizar a Carteira (Diminuir quantidade)
+    const newQty = currentQty - qty;
+
+    if (newQty > 0) {
+        // Se sobrou algo, atualiza a quantidade (o preço médio NÃO muda na venda)
+        await supabase
+            .from('user_portfolio')
+            .update({ quantity: newQty })
+            .eq('id', position.id);
+    } else {
+        // Se vendeu tudo, remove da carteira
+        await supabase
+            .from('user_portfolio')
+            .delete()
+            .eq('id', position.id);
+    }
+
+    return { profit };
+  },
