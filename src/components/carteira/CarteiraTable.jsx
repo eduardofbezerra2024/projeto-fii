@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom'; // <--- 1. ÚNICA IMPORTAÇÃO NOVA
 import { Edit, Trash2, CalendarDays, Clock, User, DollarSign, MoreHorizontal, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -54,7 +55,11 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
           <div className="flex justify-between items-start mb-3">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">{fii.ticker}</h3>
+                {/* --- 2. ALTERAÇÃO NO MOBILE: Título virou Link --- */}
+                <Link to={`/ativo/${fii.ticker}`} className="text-xl font-bold text-gray-900 dark:text-white hover:text-blue-600 hover:underline">
+                    {fii.ticker}
+                </Link>
+                {/* ------------------------------------------------ */}
                 {fii.fii_type && (
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold
                     ${fii.fii_type === 'Tijolo' ? 'bg-orange-100 text-orange-700' : 
@@ -106,12 +111,10 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
               <p className="text-gray-500 text-xs">Quantidade</p>
               <p className="font-medium">{quantity} cotas</p>
             </div>
-            {/* --- MUDANÇA: Destaque Verde para Proventos no Mobile --- */}
             <div>
-              <p className="text-gray-500 text-xs font-bold text-emerald-600">Proventos (Mês)</p>
-              <p className="font-bold text-emerald-600">{formatCurrency(monthlyIncome)}</p>
+              <p className="text-gray-500 text-xs">Renda Mensal</p>
+              <p className="font-medium text-green-600">{formatCurrency(monthlyIncome)}</p>
             </div>
-            {/* -------------------------------------------------------- */}
           </div>
 
           <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center">
@@ -154,9 +157,8 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
               <TableHead className="text-right">Preço Médio</TableHead>
               <TableHead className="text-right">Preço Atual</TableHead>
               <TableHead className="text-right">Lucro</TableHead>
-              {/* --- MUDANÇA: Coluna Destacada --- */}
+              {/* Mantendo sua coluna destacada */}
               <TableHead className="text-right text-emerald-600 font-bold bg-emerald-50/30">Proventos (Mês)</TableHead>
-              {/* -------------------------------- */}
               <TableHead className="text-right">Yield (Cost)</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -178,7 +180,11 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
                 <TableRow key={fii.id}>
                   <TableCell>
                     <div className="flex flex-col gap-1">
-                      <span className="font-bold text-gray-900 dark:text-white">{fii.ticker}</span>
+                      {/* --- 3. ALTERAÇÃO NO DESKTOP: Nome virou Link --- */}
+                      <Link to={`/ativo/${fii.ticker}`} className="font-bold text-gray-900 dark:text-white hover:text-blue-600 hover:underline">
+                        {fii.ticker}
+                      </Link>
+                      {/* ----------------------------------------------- */}
                       <span className="text-xs text-gray-500 dark:text-gray-400">{fii.sector || 'Fundo Imobiliário'}</span>
                       {fii.fii_type && fii.fii_type !== 'Indefinido' && (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded w-fit font-medium
@@ -207,7 +213,6 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
                   <TableCell className="text-right">{formatCurrency(avgPrice)}</TableCell>
                   <TableCell className="text-right">{formatCurrency(currentPrice)}</TableCell>
                   
-                  {/* Coluna Lucro */}
                   <TableCell className="text-right">
                     <div className={`flex flex-col items-end ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       <span className="font-bold">{formatCurrency(profit)}</span>
@@ -215,20 +220,13 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
                     </div>
                   </TableCell>
                   
-                  {/* --- MUDANÇA: Coluna Proventos com Fundo Verde e Destaque --- */}
+                  {/* Coluna Proventos com Destaque (Mantida) */}
                   <TableCell className="text-right bg-emerald-50/50 dark:bg-emerald-900/10 border-l border-r border-transparent">
                       <div className="flex flex-col items-end">
-                          <span className="font-bold text-emerald-700 dark:text-emerald-400 text-base">
-                            {formatCurrency(monthlyIncome)}
-                          </span>
-                          {lastDividend > 0 && (
-                            <span className="text-[10px] text-emerald-600/70 dark:text-emerald-500/70">
-                                ({formatCurrency(lastDividend)}/cota)
-                            </span>
-                          )}
+                          <span className="font-bold text-emerald-700 dark:text-emerald-400 text-base">{formatCurrency(monthlyIncome)}</span>
+                          {lastDividend > 0 && <span className="text-[10px] text-emerald-600/70 dark:text-emerald-500/70">({formatCurrency(lastDividend)}/cota)</span>}
                       </div>
                   </TableCell>
-                  {/* ------------------------------------------------------------- */}
                   
                   <TableCell className="text-right font-medium text-gray-700 dark:text-gray-300">
                     {yieldOnCost.toFixed(2)}% a.m.
@@ -236,7 +234,6 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
                   
                   <TableCell className="text-right">
                     <div className="flex justify-end items-center gap-2">
-                      {/* Botão Vender (Mantido como você enviou) */}
                       <Button 
                         size="sm" 
                         onClick={() => handleOpenSell(fii)}
