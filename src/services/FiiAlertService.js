@@ -33,9 +33,11 @@ export const sendEmailAlert = async (alertData) => {
 // ---------------------------------------------
 
 export const AlertService = {
-  async checkDailyPrices() {
+  aasync checkDailyPrices() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // MUDOU AQUI: De '/api/cron_alerts' para '/api/cron_master'
+      const response = await fetch('/api/cron_master'); 
+      const result = await response.json();
       if (!user) return { error: 'Usuário não autenticado' };
       
       console.log('Verificando preços e notícias...');
