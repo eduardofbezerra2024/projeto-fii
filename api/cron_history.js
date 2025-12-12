@@ -1,56 +1,72 @@
 import { createClient } from '@supabase/supabase-js';
 
+// --- CONFIGURAÇÃO ---
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  throw new Error('Configuração inválida: Faltam variáveis de ambiente.');
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Função Auxiliar: Busca Preço Atual no Yahoo (Igual ao robô de alertas)
+async function getCurrentPrice(ticker) {
+  try {
+    const symbol = ticker.toUpperCase().endsWith('.SA') ? ticker.toUpperCase() : `${ticker.toUpperCase()}.SA`;
+    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`);
+    const data = await res.json();
+    return data.chart.result[0].meta.regularMarketPrice;
+  } catch (err) { 
+    return null; 
+  }
+}
+
 export default async function handler(req, res) {
   try {
-    // --- 1. CONFIGURAÇÃO ROBUSTA DAS CHAVES ---
-    // Tenta pegar VITE_ (seu caso) ou NEXT_PUBLIC_ (padrão)
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    // Verificação de segurança: Se faltar chave, avisa no log em vez de quebrar silenciosamente
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error(`Configuração inválida. URL: ${!!supabaseUrl}, KEY: ${!!supabaseServiceKey}. Verifique as Variáveis de Ambiente na Vercel.`);
-    }
-
-    // Cria o cliente Supabase
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // --- 2. LÓGICA DO SNAPSHOT (A FOTO DA CARTEIRA) ---
-    
-    // Pegar todas as carteiras de todos os usuários
+    // 1. Pegar carteiras (REMOVIDO 'currentPrice' QUE DAVA ERRO)
+    // Agora pegamos o 'ticker' para poder consultar o preço na hora
     const { data: portfolios, error } = await supabase
       .from('user_portfolio')
-      .select('user_id, price, quantity, currentPrice');
+      .select('user_id, ticker, price, quantity');
 
     if (error) throw error;
 
     if (!portfolios || portfolios.length === 0) {
-      return res.status(200).json({ message: 'Nenhuma carteira encontrada para salvar.' });
+      return res.status(200).json({ message: 'Nenhuma carteira encontrada.' });
     }
 
-    // Calcular o total por usuário
+    // 2. Calcular o total por usuário
     const totalsByUser = {};
 
-    portfolios.forEach(item => {
-      // Prioriza preço atual, se não tiver usa preço médio
-      const price = Number(item.currentPrice) || Number(item.price) || 0;
+    // Como buscar preços demora, vamos fazer um loop inteligente
+    for (const item of portfolios) {
       const qtd = Number(item.quantity) || 0;
-      const total = price * qtd;
+      
+      // Tenta pegar preço atual (Yahoo). Se falhar, usa o Preço Médio pago.
+      let priceToUse = Number(item.price); 
+      
+      const livePrice = await getCurrentPrice(item.ticker);
+      if (livePrice) {
+        priceToUse = livePrice;
+      }
+
+      const total = priceToUse * qtd;
 
       if (!totalsByUser[item.user_id]) {
         totalsByUser[item.user_id] = 0;
       }
       totalsByUser[item.user_id] += total;
-    });
+    }
 
-    // Preparar dados para salvar
+    // 3. Preparar dados para salvar
     const records = Object.entries(totalsByUser).map(([userId, total]) => ({
       user_id: userId,
       total_value: total,
-      // snapshot_date é preenchido automaticamente pelo banco com a data de hoje
+      // snapshot_date é automático no banco
     }));
 
-    // Salvar no banco
+    // 4. Salvar no banco
     if (records.length > 0) {
       const { error: insertError } = await supabase
         .from('portfolio_history')
@@ -65,8 +81,7 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error('Erro Fatal no Cron History:', err.message);
-    // Retorna o erro exato para você ver na tela em vez de apenas "500"
+    console.error('Erro Cron History:', err.message);
     return res.status(500).json({ 
       error: 'Erro interno ao processar histórico', 
       details: err.message 
