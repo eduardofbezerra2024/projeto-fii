@@ -47,29 +47,56 @@ export const AlertService = {
       const prefs = await getAlertPreferences();
       const enableNews = prefs?.enable_news_alerts || false;
       
+      // 2. Busca Alertas de Preço Ativos (Configurados no Menu Alertas)
       const state = useAlertasStore.getState();
       const activeAlerts = state.alerts.filter(a => a.status === 'active');
 
-      // Se não tiver alertas e nem notícias ativadas, retorna
-      if (activeAlerts.length === 0 && !enableNews) {
-        return { success: true, checked: 0, triggered: 0, message: 'Nenhum monitoramento ativo' };
+      // 3. Busca Ativos da Carteira (Para notícias)
+      let portfolioTickers = [];
+      if (enableNews) {
+        const { data: portfolioData } = await supabase
+          .from('user_portfolio')
+          .select('ticker')
+          .eq('user_id', user.id);
+        
+        if (portfolioData) {
+          portfolioTickers = portfolioData.map(p => p.ticker);
+        }
       }
 
-      // Lista de FIIs para verificar (dos alertas de preço + carteira se necessário, aqui focamos nos alertas configurados)
-      const tickersToCheck = [...new Set(activeAlerts.map(a => a.ticker))];
+      // 4. Combina listas: Quem tem alerta de preço + Quem está na carteira
+      // Se notícias estiverem desativadas, olha só para os alertas manuais
+      const alertTickers = activeAlerts.map(a => a.ticker);
+      let tickersToCheck = [...new Set(alertTickers)];
 
+      if (enableNews) {
+        // Junta tudo e remove duplicados
+        tickersToCheck = [...new Set([...alertTickers, ...portfolioTickers])];
+      }
+
+      // Se não tiver nada para verificar, retorna
+      if (tickersToCheck.length === 0) {
+        return { success: true, checked: 0, triggered: 0, message: 'Nenhum ativo para monitorar' };
+      }
+
+      // 5. Loop de Verificação
       for (const ticker of tickersToCheck) {
         totalChecked++;
         try {
-          // A. VERIFICAÇÃO DE PREÇO
-          const quote = await getFiiQuote(ticker);
-          if (quote) {
-            const currentPrice = quote.price;
-            const triggeredCount = await this.evaluatePriceRules(user.id, ticker, currentPrice, activeAlerts);
-            totalTriggered += triggeredCount;
+          // A. VERIFICAÇÃO DE PREÇO (Só roda se houver regra de alerta para esse ticker)
+          // Verifica se este ticker específico tem alertas de preço configurados
+          const hasPriceAlert = activeAlerts.some(a => a.ticker === ticker);
+          
+          if (hasPriceAlert) {
+             const quote = await getFiiQuote(ticker);
+             if (quote) {
+               const currentPrice = quote.price;
+               const triggeredCount = await this.evaluatePriceRules(user.id, ticker, currentPrice, activeAlerts);
+               totalTriggered += triggeredCount;
+             }
           }
 
-          // B. VERIFICAÇÃO DE NOTÍCIAS
+          // B. VERIFICAÇÃO DE NOTÍCIAS (Roda para todos da lista se ativado)
           if (enableNews) {
             const news = await NewsService.getRecentNews(ticker);
             const today = new Date().toISOString().split('T')[0];
@@ -80,8 +107,9 @@ export const AlertService = {
               return newsDate === today;
             });
 
+            // Se tiver notícias novas hoje, dispara alerta
+            // (Limitamos a 1 notícia por ativo por dia para não floodar)
             if (freshNews.length > 0) {
-              // Dispara alerta para a primeira notícia do dia
               await this.triggerNewsAlert(user.id, ticker, freshNews[0]);
               totalTriggered++;
             }
@@ -100,6 +128,7 @@ export const AlertService = {
   },
 
   async evaluatePriceRules(userId, ticker, currentPrice, allAlerts) {
+    // Filtra apenas as regras desse ticker específico
     const tickerAlerts = allAlerts.filter(a => a.ticker === ticker);
     let count = 0;
     
@@ -130,14 +159,14 @@ export const AlertService = {
                </div>`
     });
 
-    // 2. Salva no Banco (com status do envio)
+    // 2. Salva no Banco
     await supabase.from('alerts').insert({
       user_id: userId,
       fii_ticker: alertConfig.ticker,
       alert_type: alertConfig.type,
       price_after: currentPrice,
       message: msg,
-      email_sent: emailResult.success // Salva se o email foi enviado ou não
+      email_sent: emailResult.success
     });
 
     // 3. Notifica na Tela
@@ -162,17 +191,18 @@ export const AlertService = {
                 <h2 style="color: #2563eb;">Nova Notícia sobre ${ticker}</h2>
                 <p>Encontramos uma notícia recente:</p>
                 <p><strong>${newsItem.title}</strong></p>
-                <a href="${newsItem.link}" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Ler Notícia Completa</a>
+                <p style="font-size: 12px; color: gray;">Fonte: ${newsItem.source || 'Mercado'}</p>
+                <a href="${newsItem.link}" target="_blank" style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin-top: 10px;">Ler Notícia Completa</a>
                </div>`
     });
 
-    // 2. Salva no Banco (com status do envio)
+    // 2. Salva no Banco
     await supabase.from('alerts').insert({
       user_id: userId,
       fii_ticker: ticker,
       alert_type: 'news',
       message: msg,
-      email_sent: emailResult.success // Salva VERDADEIRO apenas se o EmailJS funcionar
+      email_sent: emailResult.success
     });
 
     // 3. Notifica na Tela
