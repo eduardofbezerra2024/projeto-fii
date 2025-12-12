@@ -77,11 +77,9 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
                 <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {/* --- MUDANÇA VISUAL NO MOBILE: Cor mais forte --- */}
                 <DropdownMenuItem onClick={() => handleOpenSell(fii)} className="text-emerald-600 font-semibold focus:text-emerald-700 focus:bg-emerald-50">
                   <DollarSign className="mr-2 h-4 w-4" /> Vender Ativo
                 </DropdownMenuItem>
-                {/* -------------------------------------------------- */}
                 <DropdownMenuItem onClick={() => handleOpenHistory(fii.ticker)}>
                   <Clock className="mr-2 h-4 w-4" /> Histórico
                 </DropdownMenuItem>
@@ -108,10 +106,12 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
               <p className="text-gray-500 text-xs">Quantidade</p>
               <p className="font-medium">{quantity} cotas</p>
             </div>
+            {/* --- MUDANÇA: Destaque Verde para Proventos no Mobile --- */}
             <div>
-              <p className="text-gray-500 text-xs">Renda Mensal</p>
-              <p className="font-medium text-green-600">{formatCurrency(monthlyIncome)}</p>
+              <p className="text-gray-500 text-xs font-bold text-emerald-600">Proventos (Mês)</p>
+              <p className="font-bold text-emerald-600">{formatCurrency(monthlyIncome)}</p>
             </div>
+            {/* -------------------------------------------------------- */}
           </div>
 
           <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center">
@@ -154,7 +154,9 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
               <TableHead className="text-right">Preço Médio</TableHead>
               <TableHead className="text-right">Preço Atual</TableHead>
               <TableHead className="text-right">Lucro</TableHead>
-              <TableHead className="text-right">Renda Mensal</TableHead>
+              {/* --- MUDANÇA: Coluna Destacada --- */}
+              <TableHead className="text-right text-emerald-600 font-bold bg-emerald-50/30">Proventos (Mês)</TableHead>
+              {/* -------------------------------- */}
               <TableHead className="text-right">Yield (Cost)</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -204,36 +206,46 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
                   <TableCell className="text-center">{quantity}</TableCell>
                   <TableCell className="text-right">{formatCurrency(avgPrice)}</TableCell>
                   <TableCell className="text-right">{formatCurrency(currentPrice)}</TableCell>
+                  
+                  {/* Coluna Lucro */}
                   <TableCell className="text-right">
                     <div className={`flex flex-col items-end ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       <span className="font-bold">{formatCurrency(profit)}</span>
                       <span className="text-xs font-semibold">{profitPercent > 0 ? '+' : ''}{profitPercent.toFixed(2)}%</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
+                  
+                  {/* --- MUDANÇA: Coluna Proventos com Fundo Verde e Destaque --- */}
+                  <TableCell className="text-right bg-emerald-50/50 dark:bg-emerald-900/10 border-l border-r border-transparent">
                       <div className="flex flex-col items-end">
-                          <span className="font-bold text-blue-600 dark:text-blue-400">{formatCurrency(monthlyIncome)}</span>
-                          {lastDividend > 0 && <span className="text-[10px] text-gray-400">({formatCurrency(lastDividend)}/cota)</span>}
+                          <span className="font-bold text-emerald-700 dark:text-emerald-400 text-base">
+                            {formatCurrency(monthlyIncome)}
+                          </span>
+                          {lastDividend > 0 && (
+                            <span className="text-[10px] text-emerald-600/70 dark:text-emerald-500/70">
+                                ({formatCurrency(lastDividend)}/cota)
+                            </span>
+                          )}
                       </div>
                   </TableCell>
+                  {/* ------------------------------------------------------------- */}
+                  
                   <TableCell className="text-right font-medium text-gray-700 dark:text-gray-300">
                     {yieldOnCost.toFixed(2)}% a.m.
                   </TableCell>
                   
                   <TableCell className="text-right">
                     <div className="flex justify-end items-center gap-2">
-                      
-                      {/* --- MUDANÇA VISUAL NO DESKTOP: Botão de Venda Destacado --- */}
+                      {/* Botão Vender (Mantido como você enviou) */}
                       <Button 
-                        size="sm" // Tamanho pequeno
+                        size="sm" 
                         onClick={() => handleOpenSell(fii)}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold flex items-center gap-1 px-2"
                         title="Vender Ativo"
                       >
                         <DollarSign className="h-3.5 w-3.5" />
-                        <span className="hidden lg:inline">Vender</span> {/* Texto aparece em telas grandes */}
+                        <span className="hidden lg:inline">Vender</span>
                       </Button>
-                      {/* ----------------------------------------------------------- */}
 
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" onClick={() => handleOpenHistory(fii.ticker)} title="Histórico">
