@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { PortfolioService } from '@/services/UserPortfolioService';
 
-// --- FUNÇÃO DE CORREÇÃO (MANTIDA) ---
 const parseValue = (value) => {
   if (value === null || value === undefined) return 0;
   if (typeof value === 'number') return value;
@@ -15,7 +14,6 @@ const parseValue = (value) => {
   return isNaN(result) ? 0 : result;
 };
 
-// --- MANTIDA IGUAL ---
 const calculateMetrics = (portfolio) => {
   let totalInvested = 0;
   let currentValue = 0;
@@ -41,14 +39,14 @@ const useCarteiraStore = create((set, get) => ({
   portfolio: [],
   metrics: { totalInvested: 0, currentValue: 0, profitLoss: 0, totalDividends: 0 },
   dividendHistory: [], 
-  dividendByAsset: [], // <--- 1. NOVO ESTADO: Ranking por Ativo
+  dividendByAsset: [],
+  evolutionHistory: [], // <--- 1. NOVO ESTADO
   isLoading: false,
 
   fetchPortfolio: async () => {
     set({ isLoading: true });
     try {
       const data = await PortfolioService.getPortfolio();
-      
       const formatted = data.map(item => ({
         ...item,
         id: item.id,
@@ -66,8 +64,8 @@ const useCarteiraStore = create((set, get) => ({
         isLoading: false 
       });
 
-      // Calcula históricos
       get().calculateDividendHistory(formatted);
+      get().fetchEvolutionHistory(); // <--- 2. CHAMA O HISTÓRICO AQUI TAMBÉM
 
     } catch (error) {
       console.error("Erro ao buscar portfolio:", error);
@@ -75,90 +73,70 @@ const useCarteiraStore = create((set, get) => ({
     }
   },
 
-  addFII: async (fii) => {
-    try {
-      await PortfolioService.addTransaction(fii);
-      get().fetchPortfolio();
-    } catch (error) { console.error(error); }
-  },
+  // ... (addFII, removeFII, updateFII, sellFII mantidos iguais) ...
+  addFII: async (fii) => { try { await PortfolioService.addTransaction(fii); get().fetchPortfolio(); } catch (e) { console.error(e); } },
+  removeFII: async (id) => { try { await PortfolioService.removeAsset(id); const n = get().portfolio.filter((f) => f.id !== id); set({ portfolio: n, metrics: calculateMetrics(n) }); } catch (e) { throw e; } },
+  updateFII: async (id, d) => { try { await PortfolioService.updateAsset(id, d); get().fetchPortfolio(); } catch (e) { console.error(e); } },
+  sellFII: async (t, q, p, d) => { try { await PortfolioService.sellAsset(t, q, p, d); get().fetchPortfolio(); } catch (e) { throw e; } },
 
-  removeFII: async (id) => {
-    try {
-      await PortfolioService.removeAsset(id);
-      const newPortfolio = get().portfolio.filter((fii) => fii.id !== id);
-      set({ portfolio: newPortfolio, metrics: calculateMetrics(newPortfolio) });
-    } catch (error) { throw error; }
-  },
-
-  updateFII: async (id, updatedData) => {
-    try {
-      const toUpdate = { ...updatedData };
-      await PortfolioService.updateAsset(id, toUpdate);
-      get().fetchPortfolio();
-    } catch (error) { console.error(error); }
-  },
-
-  sellFII: async (ticker, quantity, price, date) => {
-    try {
-      await PortfolioService.sellAsset(ticker, quantity, price, date);
-      get().fetchPortfolio();
-    } catch (error) { throw error; }
-  },
-
-  // --- CÁLCULO DE HISTÓRICO E POR ATIVO ---
   calculateDividendHistory: async (portfolioData) => {
+    // ... (Mantém sua lógica de dividendos igualzinha) ...
     const historyMap = {};
-    const assetMap = {}; // <--- Acumulador por Ativo
-
+    const assetMap = {};
     const promises = portfolioData.map(async (asset) => {
         try {
             const res = await fetch(`/api/dividend_history?ticker=${asset.ticker}`);
             const dividends = await res.json();
-            
             if (!Array.isArray(dividends)) return;
-
             const purchaseDate = asset.purchase_date ? new Date(asset.purchase_date) : new Date();
-
             dividends.forEach(div => {
                 const payDate = new Date(div.date);
-                
                 if (payDate >= purchaseDate) {
                     const totalReceived = div.amount * (asset.quantity || 0);
-                    
-                    // 1. Soma no Mês (para o gráfico de evolução)
                     const monthKey = div.monthYear;
                     if (!historyMap[monthKey]) historyMap[monthKey] = 0;
                     historyMap[monthKey] += totalReceived;
-
-                    // 2. Soma no Ativo (para o gráfico novo)
                     if (!assetMap[asset.ticker]) assetMap[asset.ticker] = 0;
                     assetMap[asset.ticker] += totalReceived;
                 }
             });
-        } catch (err) {
-            console.error(`Erro calc history ${asset.ticker}`, err);
-        }
+        } catch (err) { console.error(err); }
     });
-
     await Promise.all(promises);
-
-    // Formata Evolução (Mês a Mês)
-    const chartData = Object.entries(historyMap).map(([name, value]) => ({
-        name, 
-        value: Number(value.toFixed(2))
-    }));
-
-    // Formata Por Ativo (Ranking)
-    const assetChartData = Object.entries(assetMap).map(([ticker, value]) => ({
-        name: ticker,
-        value: Number(value.toFixed(2))
-    })).sort((a, b) => b.value - a.value); // Ordena do maior pagador para o menor
-
-    set({ 
-        dividendHistory: chartData,
-        dividendByAsset: assetChartData // <--- Salva no estado
-    });
+    
+    const chartData = Object.entries(historyMap).map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }));
+    const assetChartData = Object.entries(assetMap).map(([ticker, value]) => ({ name: ticker, value: Number(value.toFixed(2)) })).sort((a, b) => b.value - a.value);
+    set({ dividendHistory: chartData, dividendByAsset: assetChartData });
   },
+
+  // --- 3. NOVA FUNÇÃO: BUSCAR HISTÓRICO PATRIMONIAL ---
+  fetchEvolutionHistory: async () => {
+    try {
+        const historyData = await PortfolioService.getEvolutionHistory();
+        
+        // Formata os dados vindos do banco
+        const formattedHistory = historyData.map(item => ({
+            name: new Date(item.snapshot_date).toLocaleDateString('pt-BR', { month: 'short' }), // Ex: "jan."
+            fullDate: new Date(item.snapshot_date).toLocaleDateString('pt-BR'),
+            valor: Number(item.total_value)
+        }));
+
+        // Adiciona o valor ATUAL (Tempo Real) no final do gráfico
+        const currentTotal = get().metrics.currentValue;
+        if (currentTotal > 0) {
+            formattedHistory.push({
+                name: 'Atual',
+                fullDate: 'Hoje',
+                valor: currentTotal
+            });
+        }
+
+        set({ evolutionHistory: formattedHistory });
+    } catch (error) {
+        console.error("Erro ao buscar evolução:", error);
+    }
+  },
+  // -----------------------------------------------------
 
   updateYields: (updates) => set((state) => {
     const newPortfolio = state.portfolio.map((fii) => {
@@ -173,10 +151,7 @@ const useCarteiraStore = create((set, get) => ({
       }
       return fii;
     });
-    return {
-      portfolio: newPortfolio,
-      metrics: calculateMetrics(newPortfolio),
-    };
+    return { portfolio: newPortfolio, metrics: calculateMetrics(newPortfolio) };
   }),
 }));
 

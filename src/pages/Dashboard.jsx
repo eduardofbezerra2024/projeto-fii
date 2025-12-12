@@ -7,13 +7,22 @@ import useCarteiraStore from '@/store/carteiraStore';
 import { formatCurrency } from '@/utils/formatters';
 
 const Dashboard = () => {
-  // Pegamos também o dividendByAsset
-  const { portfolio, fetchPortfolio, metrics, dividendHistory, dividendByAsset, isLoading } = useCarteiraStore();
+  // Puxamos evolutionHistory do store
+  const { 
+    portfolio, 
+    fetchPortfolio, 
+    metrics, 
+    dividendHistory, 
+    dividendByAsset, 
+    evolutionHistory, // <--- AQUI
+    isLoading 
+  } = useCarteiraStore();
 
   useEffect(() => {
     fetchPortfolio();
   }, [fetchPortfolio]);
 
+  // Dados para gráficos de Pizza
   const sectorData = useMemo(() => {
     if (!portfolio.length) return [];
     const distribution = portfolio.reduce((acc, item) => {
@@ -32,9 +41,6 @@ const Dashboard = () => {
       value: (item.currentPrice || item.price) * item.quantity
     })).sort((a, b) => b.value - a.value);
   }, [portfolio]);
-
-  const currentMonth = new Date().toLocaleString('pt-BR', { month: 'short' });
-  const evolutionData = [{ name: currentMonth, valor: metrics.currentValue }];
 
   const COLORS_TYPE = { 'Tijolo': '#f97316', 'Papel': '#3b82f6', 'Fiagro': '#22c55e', 'Infra': '#a855f7', 'Hibrido': '#eab308', 'Outros': '#94a3b8', 'Indefinido': '#cbd5e1' };
   const COLORS_ASSETS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#8dd1e1'];
@@ -85,15 +91,12 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* --- LINHA DOS PROVENTOS (2 GRÁFICOS LADO A LADO) --- */}
+        {/* --- LINHA DOS PROVENTOS --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            
-            {/* 1. Evolução Temporal (O que você já tinha) */}
             <Card className="border-green-100 dark:border-green-900/30">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-green-800 dark:text-green-400">
-                        <Coins className="h-5 w-5" />
-                        Evolução (Mês a Mês)
+                        <Coins className="h-5 w-5" /> Evolução (Mês a Mês)
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="h-[300px]">
@@ -109,18 +112,16 @@ const Dashboard = () => {
                     </ResponsiveContainer>
                 ) : (
                     <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
-                        {isLoading ? <p>Calculando...</p> : <p>Sem histórico ainda.</p>}
+                        {isLoading ? <p>Calculando...</p> : <p>Sem histórico de recebimentos ainda.</p>}
                     </div>
                 )}
                 </CardContent>
             </Card>
 
-            {/* 2. Proventos por Ativo (NOVO) */}
             <Card className="border-blue-100 dark:border-blue-900/30">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2 text-blue-800 dark:text-blue-400">
-                        <DollarSign className="h-5 w-5" />
-                        Total Recebido por Ativo
+                        <DollarSign className="h-5 w-5" /> Total Recebido por Ativo
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="h-[300px]">
@@ -128,9 +129,7 @@ const Dashboard = () => {
                     <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={dividendByAsset} layout="vertical" margin={{ left: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.3} />
-                        {/* Eixo X vira o valor em dinheiro */}
                         <XAxis type="number" axisLine={false} tickLine={false} tickFormatter={(value) => `R$${value}`} />
-                        {/* Eixo Y vira o nome do ativo */}
                         <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} width={60} tick={{fontSize: 12, fontWeight: 'bold'}} />
                         <Tooltip cursor={{fill: '#eff6ff'}} formatter={(value) => [formatCurrency(value), "Total Recebido"]} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                         <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
@@ -145,9 +144,8 @@ const Dashboard = () => {
             </Card>
         </div>
 
-        {/* --- LINHA DOS GRÁFICOS DE PIZZA --- */}
+        {/* --- GRÁFICOS DE PIZZA --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Gráfico Setores */}
             <Card>
                 <CardHeader><CardTitle>Diversificação por Setor</CardTitle></CardHeader>
                 <CardContent className="h-[300px]">
@@ -165,7 +163,6 @@ const Dashboard = () => {
                 </CardContent>
             </Card>
 
-            {/* Gráfico Ativos */}
             <Card>
                 <CardHeader><CardTitle>Peso dos Ativos</CardTitle></CardHeader>
                 <CardContent className="h-[300px]">
@@ -184,19 +181,23 @@ const Dashboard = () => {
             </Card>
         </div>
 
-        {/* EVOLUÇÃO PATRIMONIAL */}
+        {/* --- EVOLUÇÃO PATRIMONIAL (AGORA REAL) --- */}
         <Card>
             <CardHeader><CardTitle>Evolução Patrimonial</CardTitle></CardHeader>
             <CardContent className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={evolutionData}>
+              {/* Se tiver dados reais do histórico, usa eles. Se não, mostra fallback vazio */}
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={evolutionHistory}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" axisLine={false} tickLine={false} />
                     <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `R$ ${value}`} />
-                    <Tooltip formatter={(value) => formatCurrency(value)} />
+                    <Tooltip 
+                        labelFormatter={(label, payload) => payload[0]?.payload.fullDate || label}
+                        formatter={(value) => formatCurrency(value)} 
+                    />
                     <Bar dataKey="valor" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={60} />
                 </BarChart>
-                </ResponsiveContainer>
+              </ResponsiveContainer>
             </CardContent>
         </Card>
 

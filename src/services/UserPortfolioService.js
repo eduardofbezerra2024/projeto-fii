@@ -206,4 +206,24 @@ export const PortfolioService = {
 
     return { profit };
   }
+
+// ... (suas outras funções)
+
+  // 7. BUSCAR HISTÓRICO DE EVOLUÇÃO (NOVO)
+  async getEvolutionHistory() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+      .from('portfolio_history')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('snapshot_date', { ascending: true }); // Do mais antigo para o mais novo
+
+    if (error) {
+      console.error('Erro ao buscar histórico:', error);
+      return [];
+    }
+    return data;
+  }
 };
