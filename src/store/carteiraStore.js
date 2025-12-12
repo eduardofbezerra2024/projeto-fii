@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { PortfolioService } from '@/services/UserPortfolioService';
 
-// --- FUNÇÃO DE CORREÇÃO SUPER ROBUSTA ---
+// --- FUNÇÃO DE CORREÇÃO SUPER ROBUSTA (MANTIDA IGUAL) ---
 const parseValue = (value) => {
   if (value === null || value === undefined) return 0;
   if (typeof value === 'number') return value;
@@ -16,31 +16,26 @@ const parseValue = (value) => {
   str = str.replace('R$', '').trim();
 
   // DETECÇÃO DE FORMATO:
-  // Se tiver vírgula, assumimos formato Brasileiro (ex: 1.000,50 ou 33,45)
   if (str.includes(',')) {
     str = str.replace(/\./g, ''); // Remove todos os pontos de milhar
     str = str.replace(',', '.');  // Troca a vírgula decimal por ponto
   } 
-  // Se NÃO tiver vírgula, mas tiver ponto, assumimos formato Americano ou JS puro (33.45)
-  // (Nesse caso não fazemos nada, o parseFloat já entende)
 
   const result = parseFloat(str);
   return isNaN(result) ? 0 : result;
 };
 
-// Função auxiliar de cálculo
+// Função auxiliar de cálculo (MANTIDA IGUAL)
 const calculateMetrics = (portfolio) => {
   let totalInvested = 0;
   let currentValue = 0;
   let totalDividends = 0;
 
   portfolio.forEach(fii => {
-    // Garante números puros
     const qty = parseValue(fii.quantity);
     const pricePaid = parseValue(fii.price); 
     const currPrice = parseValue(fii.currentPrice);
     
-    // Se o preço atual for 0, usamos o preço pago para não zerar o total
     const finalCurrentPrice = currPrice > 0 ? currPrice : pricePaid;
     const dividend = parseValue(fii.last_dividend);
 
@@ -57,6 +52,7 @@ const calculateMetrics = (portfolio) => {
 const useCarteiraStore = create((set, get) => ({
   portfolio: [],
   metrics: { totalInvested: 0, currentValue: 0, profitLoss: 0, totalDividends: 0 },
+  dividendHistory: [], // <--- 1. NOVO ESTADO: Onde guardamos os dados do gráfico
   isLoading: false,
 
   fetchPortfolio: async () => {
@@ -64,13 +60,11 @@ const useCarteiraStore = create((set, get) => ({
     try {
       const data = await PortfolioService.getPortfolio();
       
-      // LOG PARA DEBUG (Olhe no Console F12 se der erro)
       console.log("DADOS VINDOS DO BANCO:", data);
 
       const formatted = data.map(item => ({
         ...item,
         id: item.id,
-        // Aplica a limpeza em todos os campos numéricos
         price: parseValue(item.price),
         quantity: parseValue(item.quantity),
         currentPrice: parseValue(item.currentPrice) || parseValue(item.price),
@@ -86,6 +80,10 @@ const useCarteiraStore = create((set, get) => ({
         metrics: calculateMetrics(formatted),
         isLoading: false 
       });
+
+      // <--- 2. GATILHO: Assim que carregar a carteira, calcula o histórico
+      get().calculateDividendHistory(formatted);
+
     } catch (error) {
       console.error("Erro ao buscar portfolio:", error);
       set({ isLoading: false });
@@ -111,7 +109,7 @@ const useCarteiraStore = create((set, get) => ({
       });
     } catch (error) {
       console.error("Erro ao remover:", error);
-      throw error; // <--- AGORA SIM! Joga o erro para a tela ver.
+      throw error; 
     }
   },
 
@@ -125,22 +123,68 @@ const useCarteiraStore = create((set, get) => ({
     }
   },
 
-  // --- 🔴 NOVA FUNÇÃO DE VENDA ADICIONADA AQUI ---
+  // --- FUNÇÃO DE VENDA (MANTIDA IGUAL) ---
   sellFII: async (ticker, quantity, price, date) => {
     try {
-      // Chama o serviço do Supabase
       await PortfolioService.sellAsset(ticker, quantity, price, date);
-      
-      // Recarrega a carteira para atualizar o saldo e os lucros
       get().fetchPortfolio();
-      
     } catch (error) {
       console.error("Erro ao vender:", error);
-      // Repassa o erro para que a tela (Carteira.jsx) possa mostrar o Toast de erro
       throw error;
     }
   },
-  // -----------------------------------------------
+
+  // --- 3. NOVA FUNÇÃO LÓGICA: CÁLCULO MÊS A MÊS ---
+  calculateDividendHistory: async (portfolioData) => {
+    const historyMap = {};
+
+    // Para cada FII que você tem...
+    const promises = portfolioData.map(async (asset) => {
+        try {
+            // Chama a nova API para pegar o histórico de pagamentos dele
+            const res = await fetch(`/api/dividend_history?ticker=${asset.ticker}`);
+            const dividends = await res.json();
+            
+            if (!Array.isArray(dividends)) return;
+
+            // Define a data de compra (se não tiver, assume hoje para não quebrar)
+            const purchaseDate = asset.purchase_date ? new Date(asset.purchase_date) : new Date();
+
+            dividends.forEach(div => {
+                const payDate = new Date(div.date);
+                
+                // LÓGICA DE OURO: Só soma se o pagamento foi DEPOIS que você comprou
+                if (payDate >= purchaseDate) {
+                    const monthKey = div.monthYear; // Ex: "jan. de 2024"
+                    
+                    if (!historyMap[monthKey]) {
+                        historyMap[monthKey] = 0;
+                    }
+                    
+                    // Soma: (Valor pago no mês * Quantidade de cotas que você tem)
+                    historyMap[monthKey] += div.amount * (asset.quantity || 0);
+                }
+            });
+        } catch (err) {
+            console.error(`Erro ao calcular histórico para ${asset.ticker}`, err);
+        }
+    });
+
+    // Espera calcular de todos os FIIs
+    await Promise.all(promises);
+
+    // Formata para o gráfico (Array de objetos)
+    const chartData = Object.entries(historyMap).map(([name, value]) => ({
+        name, 
+        value: Number(value.toFixed(2))
+    }));
+    
+    // Opcional: Ordenação simples baseada no texto (pode ser melhorado depois com datas reais)
+    // chartData.sort(...); 
+
+    set({ dividendHistory: chartData });
+  },
+  // ------------------------------------------------
 
   updateYields: (updates) => set((state) => {
     const newPortfolio = state.portfolio.map((fii) => {

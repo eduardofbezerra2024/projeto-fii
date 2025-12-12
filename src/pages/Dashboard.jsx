@@ -7,7 +7,8 @@ import useCarteiraStore from '@/store/carteiraStore';
 import { formatCurrency } from '@/utils/formatters';
 
 const Dashboard = () => {
-  const { portfolio, fetchPortfolio, metrics, isLoading } = useCarteiraStore();
+  // ADICIONADO: dividendHistory
+  const { portfolio, fetchPortfolio, metrics, dividendHistory, isLoading } = useCarteiraStore();
 
   useEffect(() => {
     fetchPortfolio();
@@ -75,7 +76,7 @@ const Dashboard = () => {
 
           <Card className="bg-green-50 dark:bg-green-900/10 border-green-100 dark:border-green-900/30">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-green-700 dark:text-green-400">Renda Mensal</CardTitle>
+              <CardTitle className="text-sm font-medium text-green-700 dark:text-green-400">Renda Mensal (Atual)</CardTitle>
               <Coins className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
@@ -107,6 +108,38 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* --- NOVO GRÁFICO: HISTÓRICO DE PROVENTOS (MÊS A MÊS) --- */}
+        <Card className="border-green-100 dark:border-green-900/30">
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-green-800 dark:text-green-400">
+                    <Coins className="h-5 w-5" />
+                    Evolução de Proventos (Recebido Real)
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+              {dividendHistory && dividendHistory.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dividendHistory}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12}} />
+                    <YAxis axisLine={false} tickLine={false} tickFormatter={(value) => `R$${value}`} />
+                    <Tooltip 
+                        cursor={{fill: '#f0fdf4'}}
+                        formatter={(value) => [formatCurrency(value), "Recebido"]}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    />
+                    <Bar dataKey="value" fill="#16a34a" radius={[4, 4, 0, 0]} barSize={50} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm">
+                    {isLoading ? <p>Calculando histórico...</p> : <p>Sem histórico de recebimentos ainda.</p>}
+                </div>
+              )}
+            </CardContent>
+        </Card>
+        {/* -------------------------------------------------------- */}
 
         {/* --- LINHA DOS GRÁFICOS DE PIZZA --- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
