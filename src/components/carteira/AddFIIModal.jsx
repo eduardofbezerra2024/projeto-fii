@@ -16,38 +16,25 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
   const [owner, setOwner] = useState(''); 
   const [loadingSearch, setLoadingSearch] = useState(false);
 
-  // --- FUNÇÃO TURBINADA DE BUSCA ---
   const handleSearchTicker = async () => {
     if (!ticker) return;
     setLoadingSearch(true);
     
     try {
-      // 1. Busca Preço e Setor (Dados Básicos)
+      // 1. Busca Preço (Yahoo/Brapi)
       const data = await getFiiQuote(ticker);
-      
       if (data) {
-        setPrice(data.price); // Preenche o preço
-
-        // Tenta descobrir o Tipo pelo Setor
-        if (data.sector) {
-            const sec = data.sector.toLowerCase();
-            if (sec.includes('papel') || sec.includes('receb') || sec.includes('cr') || sec.includes('fundo de fundos')) setFiiType('Papel');
-            else if (sec.includes('tijolo') || sec.includes('log') || sec.includes('shop') || sec.includes('laje') || sec.includes('hibrido')) setFiiType('Tijolo');
-            else if (sec.includes('agro') || sec.includes('fiagro')) setFiiType('Fiagro');
-            else if (sec.includes('infra')) setFiiType('Infra');
-            else setFiiType('Indefinido');
-        }
+        setPrice(data.price);
       }
 
-      // 2. Busca Dividendos (Dados Avançados)
-      // Chama a sua API interna que faz o scraping
+      // 2. Busca Dividendos e TIPO DE FUNDO (Sua API Investidor10)
       try {
         const divRes = await fetch(`/api/dividend?ticker=${ticker}`);
         const divData = await divRes.json();
 
-        // Se encontrou o último rendimento (ex: "R$ 0,10")
+        // A. Preencher Último Provento
         if (divData && divData.ultimoRendimento) {
-            // Limpa o texto para virar número (tira R$, espaços e troca vírgula por ponto)
+            // Limpa o valor (R$ 0,10 -> 0.10)
             const cleanVal = divData.ultimoRendimento
                 .replace('R$', '')
                 .replace(/\s/g, '')
@@ -60,16 +47,29 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
             }
         }
         
-        // Se a API de dividendo tiver um segmento melhor, usa ele para o Tipo
-        if (divData && divData.segmento) {
-            const seg = divData.segmento.toLowerCase();
-            if (seg.includes('papel') || seg.includes('receb')) setFiiType('Papel');
-            else if (seg.includes('tijolo') || seg.includes('log') || seg.includes('shop') || seg.includes('hibrido')) setFiiType('Tijolo');
-            else if (seg.includes('agro')) setFiiType('Fiagro');
+        // B. Preencher TIPO DO FUNDO (A Melhoria)
+        // Combina o "Tipo de Fundo" e o "Segmento" para tentar achar a melhor categoria
+        const rawType = (divData.fundType || '').toUpperCase();   // Ex: "FUNDO DE PAPEL"
+        const rawSeg = (divData.segmento || '').toUpperCase();    // Ex: "HÍBRIDO"
+        const combined = rawType + ' ' + rawSeg;
+
+        if (combined.includes('PAPEL') || combined.includes('RECEB') || combined.includes('CRI')) {
+            setFiiType('Papel');
+        } else if (combined.includes('TIJOLO') || combined.includes('SHOPPING') || combined.includes('LOG') || combined.includes('LAJE') || combined.includes('IMOBIL')) {
+            setFiiType('Tijolo');
+        } else if (combined.includes('FIAGRO') || combined.includes('AGRO')) {
+            setFiiType('Fiagro');
+        } else if (combined.includes('INFRA')) {
+            setFiiType('Infra');
+        } else if (combined.includes('HÍBRIDO') || combined.includes('MISTO')) {
+            // Se for híbrido, geralmente cai como Tijolo ou Papel dependendo da gestão, 
+            // mas vamos colocar Tijolo como padrão ou deixar Indefinido se preferir.
+            // Aqui vou colocar Tijolo pois a maioria dos híbridos tem imóveis.
+            setFiiType('Tijolo'); 
         }
 
       } catch (errDiv) {
-        console.warn("Não foi possível buscar dividendos automaticamente", errDiv);
+        console.warn("Não foi possível buscar dados do Investidor10", errDiv);
       }
 
     } catch (error) {
@@ -82,7 +82,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Data segura (meio-dia)
     const purchaseDateObj = new Date(date + 'T12:00:00');
 
     const assetData = {
@@ -97,12 +96,12 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
 
     await onSave(assetData);
     
-    // Limpa o formulário
     setTicker('');
     setQuantity('');
     setPrice('');
     setOwner('');
     setLastDividend('');
+    setFiiType('Indefinido');
     onClose();
   };
 
@@ -115,7 +114,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
         
         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
           
-          {/* INVESTIDOR */}
           <div className="grid gap-2">
             <Label htmlFor="owner" className="flex items-center gap-2 text-blue-600">
                 <User className="h-4 w-4" /> Nome do Investidor
@@ -129,7 +127,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
             />
           </div>
 
-          {/* TICKER + BOTÃO DE BUSCA */}
           <div className="grid gap-2">
             <Label htmlFor="ticker">Ticker (Código)</Label>
             <div className="flex gap-2">
@@ -146,14 +143,13 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
                     variant="outline" 
                     onClick={handleSearchTicker} 
                     disabled={loadingSearch}
-                    title="Buscar Preço e Proventos"
+                    title="Buscar Dados Automáticos"
                 >
                     {loadingSearch ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 </Button>
             </div>
           </div>
 
-          {/* QTD e PREÇO */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="quantity">Quantidade</Label>
@@ -180,7 +176,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
             </div>
           </div>
 
-          {/* DATA e DIVIDENDO */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
                 <Label htmlFor="date">Data Compra</Label>
@@ -205,7 +200,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
             </div>
           </div>
 
-          {/* TIPO */}
           <div className="grid gap-2">
             <Label htmlFor="type">Tipo do Fundo</Label>
             <select 
