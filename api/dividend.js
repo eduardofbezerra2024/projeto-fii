@@ -19,7 +19,9 @@ export default async function handler(req, res) {
     });
 
     if (!response.ok) {
-        throw new Error(`Falha ao acessar Investidor10 (${response.status})`);
+        // Se der erro no Investidor10, tenta retornar vazio para não quebrar o site
+        console.error(`Falha ao acessar Investidor10: ${response.status}`);
+        return res.status(200).json({ dividend: 0, ultimoRendimento: "0.00" });
     }
 
     const html = await response.text();
@@ -55,7 +57,7 @@ export default async function handler(req, res) {
         }
     });
 
-    // Tratamento especial para números (para manter compatibilidade com o modal de adicionar)
+    // Tratamento especial para números
     let dividendNumber = 0;
     if (fullData.ultimoRendimento) {
         const clean = fullData.ultimoRendimento.replace('R$', '').replace(/\s/g, '').replace(',', '.');
@@ -64,9 +66,13 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ 
         ticker: ticker.toUpperCase(),
-        dividend: dividendNumber, // Mantemos esse para não quebrar o Modal de adicionar
-        fundType: fullData.tipoFundo, // Mantemos esse para não quebrar o Modal de adicionar
-        details: fullData, // AQUI ESTÁ O OURO: Todos os dados novos detalhados
+        // Campos para compatibilidade com o Modal:
+        dividend: dividendNumber, 
+        ultimoRendimento: fullData.ultimoRendimento, // Importante para o preenchimento automático
+        segmento: fullData.segmento, // Importante para selecionar o Tipo
+        
+        // Dados extras detalhados:
+        details: fullData, 
         source: 'Investidor10 (Scraper V7)' 
     });
 
