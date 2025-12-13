@@ -11,7 +11,8 @@ import Configuracoes from '@/pages/Configuracoes';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import NotFound from '@/pages/NotFound';
-import DetalhesAtivo from '@/pages/DetalhesAtivo'; // <--- 1. IMPORT NOVO
+import DetalhesAtivo from '@/pages/DetalhesAtivo';
+import RelatorioInvestidores from '@/pages/RelatorioInvestidores'; // <--- IMPORT NOVO
 import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/utils/constants';
 import LoadingSpinner from '@/components/common/LoadingSpinner';
@@ -80,8 +81,10 @@ function App() {
         <Route path={ROUTES.ALERTAS} element={<ProtectedRoute><AppLayout><Alertas /></AppLayout></ProtectedRoute>} />
         <Route path={ROUTES.CONFIGURACOES} element={<ProtectedRoute><AppLayout><Configuracoes /></AppLayout></ProtectedRoute>} />
         
-        {/* --- 2. ROTA NOVA --- */}
         <Route path="/ativo/:ticker" element={<ProtectedRoute><AppLayout><DetalhesAtivo /></AppLayout></ProtectedRoute>} />
+        
+        {/* --- ROTA NOVA --- */}
+        <Route path="/investidores" element={<ProtectedRoute><AppLayout><RelatorioInvestidores /></AppLayout></ProtectedRoute>} />
         
         <Route path="/" element={<Navigate to={ROUTES.DASHBOARD} />} />
         <Route path="*" element={<NotFound />} />
