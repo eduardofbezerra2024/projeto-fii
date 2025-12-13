@@ -3,26 +3,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { CalendarIcon, Search, User, Loader2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Search, User, Loader2 } from 'lucide-react';
 import { getFiiQuote } from '@/services/fiiService';
 
-const AddTransactionModal = ({ isOpen, onClose, onSave }) => {
+// Código Simplificado sem dependências externas de Calendário
+const AddFIIModal = ({ isOpen, onClose, onSave }) => {
   const [ticker, setTicker] = useState('');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
-  const [date, setDate] = useState(new Date());
+  // Data inicial padrão (Hoje) formatada para o input do HTML
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [lastDividend, setLastDividend] = useState('');
   const [fiiType, setFiiType] = useState('Indefinido');
-  const [owner, setOwner] = useState(''); // <--- ESTADO DO INVESTIDOR
+  const [owner, setOwner] = useState(''); 
   const [loadingSearch, setLoadingSearch] = useState(false);
 
-  // Função para buscar dados automáticos ao digitar o Ticker
   const handleSearchTicker = async () => {
     if (!ticker) return;
     setLoadingSearch(true);
@@ -30,10 +26,11 @@ const AddTransactionModal = ({ isOpen, onClose, onSave }) => {
       const data = await getFiiQuote(ticker);
       if (data) {
         setPrice(data.price);
-        // Tenta adivinhar o tipo baseando no setor (simplificado)
         if (data.sector) {
-            if (data.sector.toLowerCase().includes('papel') || data.sector.toLowerCase().includes('receb')) setFiiType('Papel');
-            else if (data.sector.toLowerCase().includes('tijolo') || data.sector.toLowerCase().includes('log') || data.sector.toLowerCase().includes('shop')) setFiiType('Tijolo');
+            const sec = data.sector.toLowerCase();
+            if (sec.includes('papel') || sec.includes('receb')) setFiiType('Papel');
+            else if (sec.includes('tijolo') || sec.includes('log') || sec.includes('shop')) setFiiType('Tijolo');
+            else if (sec.includes('agro')) setFiiType('Fiagro');
             else setFiiType('Indefinido');
         }
       }
@@ -47,17 +44,17 @@ const AddTransactionModal = ({ isOpen, onClose, onSave }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Prepara os dados para salvar
+    // Garante que a data seja salva corretamente ao meio-dia para evitar problemas de fuso horário
+    const purchaseDateObj = new Date(date + 'T12:00:00');
+
     const assetData = {
       ticker: ticker.toUpperCase(),
       quantity: Number(quantity),
       price: Number(price),
-      purchaseDate: date,
+      purchaseDate: purchaseDateObj,
       lastDividend: Number(lastDividend),
       fiiType,
-      // --- AQUI ESTÁ A CORREÇÃO: ENVIAR O NOME ---
       owner: owner.trim() || 'Geral' 
-      // -------------------------------------------
     };
 
     await onSave(assetData);
@@ -79,7 +76,7 @@ const AddTransactionModal = ({ isOpen, onClose, onSave }) => {
         
         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
           
-          {/* CAMPO INVESTIDOR (CORRIGIDO) */}
+          {/* CAMPO INVESTIDOR */}
           <div className="grid gap-2">
             <Label htmlFor="owner" className="flex items-center gap-2 text-blue-600">
                 <User className="h-4 w-4" /> Nome do Investidor
@@ -93,6 +90,7 @@ const AddTransactionModal = ({ isOpen, onClose, onSave }) => {
             />
           </div>
 
+          {/* TICKER */}
           <div className="grid gap-2">
             <Label htmlFor="ticker">Ticker (Código)</Label>
             <div className="flex gap-2">
@@ -109,6 +107,7 @@ const AddTransactionModal = ({ isOpen, onClose, onSave }) => {
             </div>
           </div>
 
+          {/* QUANTIDADE E PREÇO */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="quantity">Quantidade</Label>
@@ -135,23 +134,17 @@ const AddTransactionModal = ({ isOpen, onClose, onSave }) => {
             </div>
           </div>
 
+          {/* DATA (Corrigido para usar input nativo e não dar erro de arquivo faltando) */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
-                <Label>Data Compra</Label>
-                <Popover>
-                    <PopoverTrigger asChild>
-                    <Button
-                        variant={"outline"}
-                        className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}
-                    >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {date ? format(date, "dd/MM/yyyy", { locale: ptBR }) : <span>Selecione</span>}
-                    </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={ptBR}/>
-                    </PopoverContent>
-                </Popover>
+                <Label htmlFor="date">Data Compra</Label>
+                <Input 
+                    type="date" 
+                    id="date" 
+                    required
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="dividend">Último Provento</Label>
@@ -166,6 +159,7 @@ const AddTransactionModal = ({ isOpen, onClose, onSave }) => {
             </div>
           </div>
 
+          {/* TIPO */}
           <div className="grid gap-2">
             <Label htmlFor="type">Tipo do Fundo</Label>
             <Select value={fiiType} onValueChange={setFiiType}>
@@ -173,10 +167,10 @@ const AddTransactionModal = ({ isOpen, onClose, onSave }) => {
                     <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="Tijolo">🧱 Tijolo (Imóveis Físicos)</SelectItem>
-                    <SelectItem value="Papel">📄 Papel (CRIs/Dívidas)</SelectItem>
-                    <SelectItem value="Fiagro">🌾 Fiagro (Agronegócio)</SelectItem>
-                    <SelectItem value="Infra">🏗️ Infra (Infraestrutura)</SelectItem>
+                    <SelectItem value="Tijolo">🧱 Tijolo</SelectItem>
+                    <SelectItem value="Papel">📄 Papel</SelectItem>
+                    <SelectItem value="Fiagro">🌾 Fiagro</SelectItem>
+                    <SelectItem value="Infra">🏗️ Infra</SelectItem>
                     <SelectItem value="Indefinido">❓ Indefinido</SelectItem>
                 </SelectContent>
             </Select>
@@ -192,4 +186,4 @@ const AddTransactionModal = ({ isOpen, onClose, onSave }) => {
   );
 };
 
-export default AddTransactionModal;
+export default AddFIIModal;
