@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+// REMOVIDO: import { Select... } pois esse arquivo não existe e quebra o build
 import { Search, User, Loader2 } from 'lucide-react';
 import { getFiiQuote } from '@/services/fiiService';
 
@@ -47,7 +47,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
       ticker: ticker.toUpperCase(),
       quantity: Number(quantity),
       price: Number(price),
-      // Cria a data corretamente garantindo o fuso horário
+      // Cria a data corretamente garantindo o fuso horário (meio-dia)
       purchaseDate: new Date(date + 'T12:00:00'),
       lastDividend: Number(lastDividend),
       fiiType,
@@ -135,7 +135,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
                 <Label htmlFor="date">Data Compra</Label>
-                {/* AQUI MUDOU: Usando input nativo simples */}
+                {/* Input nativo simples para evitar erros de dependência */}
                 <Input 
                     type="date" 
                     id="date" 
@@ -157,21 +157,21 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
             </div>
           </div>
 
-          {/* TIPO */}
+          {/* TIPO (Alterado para HTML padrão para não quebrar) */}
           <div className="grid gap-2">
             <Label htmlFor="type">Tipo do Fundo</Label>
-            <Select value={fiiType} onValueChange={setFiiType}>
-                <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="Tijolo">🧱 Tijolo</SelectItem>
-                    <SelectItem value="Papel">📄 Papel</SelectItem>
-                    <SelectItem value="Fiagro">🌾 Fiagro</SelectItem>
-                    <SelectItem value="Infra">🏗️ Infra</SelectItem>
-                    <SelectItem value="Indefinido">❓ Indefinido</SelectItem>
-                </SelectContent>
-            </Select>
+            <select 
+                value={fiiType} 
+                onChange={(e) => setFiiType(e.target.value)}
+                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:ring-offset-slate-950 dark:placeholder:text-slate-400 dark:focus:ring-slate-300"
+            >
+               <option value="Indefinido">Selecione</option>
+               <option value="Tijolo">🧱 Tijolo</option>
+               <option value="Papel">📄 Papel</option>
+               <option value="Fiagro">🌾 Fiagro</option>
+               <option value="Infra">🏗️ Infra</option>
+               <option value="Indefinido">❓ Indefinido</option>
+            </select>
           </div>
 
           <DialogFooter>
