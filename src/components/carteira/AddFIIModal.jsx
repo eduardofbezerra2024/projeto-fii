@@ -3,16 +3,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+// Removidos imports quebrados (Select, Calendar, etc)
 import { Search, User, Loader2 } from 'lucide-react';
 import { getFiiQuote } from '@/services/fiiService';
 
-// Código Simplificado sem dependências externas de Calendário
 const AddFIIModal = ({ isOpen, onClose, onSave }) => {
   const [ticker, setTicker] = useState('');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
-  // Data inicial padrão (Hoje) formatada para o input do HTML
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [lastDividend, setLastDividend] = useState('');
   const [fiiType, setFiiType] = useState('Indefinido');
@@ -44,7 +42,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Garante que a data seja salva corretamente ao meio-dia para evitar problemas de fuso horário
+    // Cria data segura para evitar fuso horário
     const purchaseDateObj = new Date(date + 'T12:00:00');
 
     const assetData = {
@@ -59,7 +57,6 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
 
     await onSave(assetData);
     
-    // Limpa o formulário
     setTicker('');
     setQuantity('');
     setPrice('');
@@ -134,7 +131,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
             </div>
           </div>
 
-          {/* DATA (Corrigido para usar input nativo e não dar erro de arquivo faltando) */}
+          {/* DATA E PROVENTO */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
                 <Label htmlFor="date">Data Compra</Label>
@@ -159,21 +156,21 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
             </div>
           </div>
 
-          {/* TIPO */}
+          {/* TIPO DO FUNDO (Substituído por HTML padrão para não quebrar) */}
           <div className="grid gap-2">
             <Label htmlFor="type">Tipo do Fundo</Label>
-            <Select value={fiiType} onValueChange={setFiiType}>
-                <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="Tijolo">🧱 Tijolo</SelectItem>
-                    <SelectItem value="Papel">📄 Papel</SelectItem>
-                    <SelectItem value="Fiagro">🌾 Fiagro</SelectItem>
-                    <SelectItem value="Infra">🏗️ Infra</SelectItem>
-                    <SelectItem value="Indefinido">❓ Indefinido</SelectItem>
-                </SelectContent>
-            </Select>
+            <select
+              id="type"
+              value={fiiType}
+              onChange={(e) => setFiiType(e.target.value)}
+              className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:ring-offset-slate-950 dark:placeholder:text-slate-400 dark:focus:ring-slate-300"
+            >
+                <option value="Indefinido">Selecione</option>
+                <option value="Tijolo">🧱 Tijolo</option>
+                <option value="Papel">📄 Papel</option>
+                <option value="Fiagro">🌾 Fiagro</option>
+                <option value="Infra">🏗️ Infra</option>
+            </select>
           </div>
 
           <DialogFooter>
