@@ -1,163 +1,195 @@
-import { supabase } from '@/lib/customSupabaseClient';
+import { create } from 'zustand';
+import { PortfolioService } from '@/services/UserPortfolioService';
 
-export const PortfolioService = {
-  // 1. Buscar carteira
-  async getPortfolio() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
+// Função auxiliar para limpar números (R$ 1.000,00 -> 1000.00)
+const parseValue = (value) => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return value;
+  let str = String(value).trim();
+  if (str === '') return 0;
+  // Remove R$ e espaços
+  str = str.replace('R$', '').trim();
+  // Se tiver vírgula, assume formato PT-BR (remove ponto de milhar, troca vírgula por ponto)
+  if (str.includes(',')) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  } 
+  const result = parseFloat(str);
+  return isNaN(result) ? 0 : result;
+};
 
-    const { data, error } = await supabase
-      .from('user_portfolio')
-      .select('*')
-      .eq('user_id', user.id);
+// Calcula totais da carteira
+const calculateMetrics = (portfolio) => {
+  let totalInvested = 0;
+  let currentValue = 0;
+  let totalDividends = 0;
 
-    if (error) {
-      console.error('Erro ao buscar carteira:', error);
-      return [];
-    }
-    return data;
-  },
-
-  // 2. Buscar transações
-  async getTransactions(ticker) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
-
-    const { data, error } = await supabase
-      .from('portfolio_transactions')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('ticker', ticker)
-      .order('date', { ascending: false });
+  portfolio.forEach(fii => {
+    const qty = parseValue(fii.quantity);
+    const pricePaid = parseValue(fii.price); 
+    const currPrice = parseValue(fii.currentPrice);
     
-    if (error) {
-      console.error('Erro ao buscar transações:', error);
-      return [];
-    }
-    return data;
-  },
+    // Se preço atual for 0 ou inválido, usa o preço pago para não zerar o gráfico
+    const finalCurrentPrice = currPrice > 0 ? currPrice : pricePaid;
+    const dividend = parseValue(fii.last_dividend);
 
-  // 3. ADICIONAR (CORRIGIDO PARA SALVAR O DONO)
-  async addTransaction(asset) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Usuário não logado');
+    totalInvested += pricePaid * qty;
+    currentValue += finalCurrentPrice * qty;
+    totalDividends += dividend * qty;
+  });
 
-    // A. Salvar Histórico
-    const { error: transError } = await supabase
-      .from('portfolio_transactions')
-      .insert({
-        user_id: user.id,
-        ticker: asset.ticker,
-        quantity: asset.quantity,
-        price: asset.price,
-        date: asset.purchaseDate || new Date(),
-        type: 'buy'
+  const profitLoss = currentValue - totalInvested;
+  return { totalInvested, currentValue, profitLoss, totalDividends };
+};
+
+const useCarteiraStore = create((set, get) => ({
+  portfolio: [],
+  metrics: { totalInvested: 0, currentValue: 0, profitLoss: 0, totalDividends: 0 },
+  dividendHistory: [], 
+  dividendByAsset: [],
+  evolutionHistory: [],
+  isLoading: false,
+
+  // Ação principal: Buscar dados do banco
+  fetchPortfolio: async () => {
+    set({ isLoading: true });
+    try {
+      const data = await PortfolioService.getPortfolio();
+      
+      // Formata os dados vindos do banco
+      const formatted = data.map(item => ({
+        ...item,
+        id: item.id,
+        price: parseValue(item.price),
+        quantity: parseValue(item.quantity),
+        currentPrice: parseValue(item.currentPrice) || parseValue(item.price),
+        last_dividend: parseValue(item.last_dividend),
+        fii_type: item.fii_type,
+        // Garante que o campo owner seja lido
+        owner: item.owner || 'Geral' 
+      }));
+
+      set({ 
+        portfolio: formatted, 
+        metrics: calculateMetrics(formatted),
+        isLoading: false 
       });
 
-    if (transError) throw transError;
+      // Dispara cálculos secundários
+      get().calculateDividendHistory(formatted);
+      get().fetchEvolutionHistory();
 
-    // B. Buscar posição atual
-    const { data: currentPosition } = await supabase
-      .from('user_portfolio')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('ticker', asset.ticker)
-      .single();
-
-    let newQuantity = Number(asset.quantity);
-    let newAvgPrice = Number(asset.price);
-
-    // C. Calcular Preço Médio
-    if (currentPosition) {
-      const oldQty = Number(currentPosition.quantity);
-      const oldPrice = Number(currentPosition.price);
-      const addedQty = Number(asset.quantity);
-      const addedPrice = Number(asset.price);
-
-      const totalQty = oldQty + addedQty;
-      const totalValue = (oldQty * oldPrice) + (addedQty * addedPrice);
-      
-      newQuantity = totalQty;
-      newAvgPrice = totalValue / totalQty;
+    } catch (error) {
+      console.error("Erro ao buscar portfolio:", error);
+      set({ isLoading: false });
     }
+  },
 
-    // D. Salvar na Carteira (AGORA COM O OWNER)
-    const { data, error } = await supabase
-      .from('user_portfolio')
-      .upsert({
-        user_id: user.id,
-        id: currentPosition?.id, 
-        ticker: asset.ticker,
-        quantity: newQuantity,
-        price: newAvgPrice,
-        sector: asset.sector,
-        purchase_date: currentPosition?.purchase_date || asset.purchaseDate,
-        last_dividend: asset.lastDividend || currentPosition?.last_dividend || 0,
-        fii_type: asset.fiiType || currentPosition?.fii_type || 'Indefinido',
+  addFII: async (fii) => { 
+      try { 
+          await PortfolioService.addTransaction(fii); 
+          get().fetchPortfolio(); 
+      } catch (e) { console.error(e); } 
+  },
+  
+  removeFII: async (id) => { 
+      try { 
+          await PortfolioService.removeAsset(id); 
+          const n = get().portfolio.filter((f) => f.id !== id); 
+          set({ portfolio: n, metrics: calculateMetrics(n) }); 
+      } catch (e) { throw e; } 
+  },
+  
+  updateFII: async (id, d) => { 
+      try { 
+          await PortfolioService.updateAsset(id, d); 
+          get().fetchPortfolio(); 
+      } catch (e) { console.error(e); } 
+  },
+  
+  sellFII: async (t, q, p, d) => { 
+      try { 
+          await PortfolioService.sellAsset(t, q, p, d); 
+          get().fetchPortfolio(); 
+      } catch (e) { throw e; } 
+  },
+
+  calculateDividendHistory: async (portfolioData) => {
+    const historyMap = {};
+    const assetMap = {};
+    
+    const promises = portfolioData.map(async (asset) => {
+        try {
+            // Busca histórico de dividendos na API
+            const res = await fetch(`/api/dividend_history?ticker=${asset.ticker}`);
+            const dividends = await res.json();
+            
+            if (!Array.isArray(dividends)) return;
+
+            const purchaseDate = asset.purchase_date ? new Date(asset.purchase_date) : new Date();
+
+            dividends.forEach(div => {
+                const payDate = new Date(div.date);
+                // Só conta dividendos após a data de compra
+                if (payDate >= purchaseDate) {
+                    const totalReceived = div.amount * (asset.quantity || 0);
+                    const monthKey = div.monthYear; // Ex: "jan/24"
+
+                    if (!historyMap[monthKey]) historyMap[monthKey] = 0;
+                    historyMap[monthKey] += totalReceived;
+
+                    if (!assetMap[asset.ticker]) assetMap[asset.ticker] = 0;
+                    assetMap[asset.ticker] += totalReceived;
+                }
+            });
+        } catch (err) { console.error(err); }
+    });
+
+    await Promise.all(promises);
+    
+    // Formata para os gráficos
+    const chartData = Object.entries(historyMap).map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }));
+    const assetChartData = Object.entries(assetMap).map(([ticker, value]) => ({ name: ticker, value: Number(value.toFixed(2)) })).sort((a, b) => b.value - a.value);
+    
+    set({ dividendHistory: chartData, dividendByAsset: assetChartData });
+  },
+
+  fetchEvolutionHistory: async () => {
+    try {
+        const historyData = await PortfolioService.getEvolutionHistory();
         
-        // --- AQUI ESTAVA FALTANDO ---
-        owner: asset.owner || currentPosition?.owner || 'Geral' 
-        // ---------------------------
-      })
-      .select()
-      .single();
+        const formattedHistory = historyData.map(item => ({
+            name: new Date(item.snapshot_date).toLocaleDateString('pt-BR', { month: 'short' }),
+            fullDate: new Date(item.snapshot_date).toLocaleDateString('pt-BR'),
+            valor: Number(item.total_value)
+        }));
 
-    if (error) throw error;
-    return data;
+        // Adiciona o valor atual ao final do gráfico
+        const currentTotal = get().metrics.currentValue;
+        if (currentTotal > 0) {
+            formattedHistory.push({ name: 'Atual', fullDate: 'Hoje', valor: currentTotal });
+        }
+
+        set({ evolutionHistory: formattedHistory });
+    } catch (error) { console.error("Erro evolução:", error); }
   },
 
-  // 4. Remover
-  async removeAsset(id) {
-    const { error, count } = await supabase.from('user_portfolio').delete({ count: 'exact' }).eq('id', id);
-    if (error) throw error;
-    if (count === 0) throw new Error("Item não encontrado.");
-  },
-
-  // 5. Atualizar
-  async updateAsset(id, updates) {
-    const { data, error } = await supabase.from('user_portfolio').update(updates).eq('id', id).select().single();
-    if (error) throw error;
-    return data;
-  },
-
-  // 6. Vender
-  async sellAsset(ticker, quantityToSell, sellPrice, date) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Login necessário');
-
-    const { data: position } = await supabase.from('user_portfolio').select('*').eq('user_id', user.id).eq('ticker', ticker).single();
-
-    if (!position || Number(position.quantity) < Number(quantityToSell)) throw new Error('Saldo insuficiente.');
-
-    const currentQty = Number(position.quantity);
-    const avgPrice = Number(position.price);
-    const saleValue = Number(sellPrice);
-    const qty = Number(quantityToSell);
-    const profit = (saleValue - avgPrice) * qty;
-
-    await supabase.from('closed_positions').insert({
-        user_id: user.id, ticker: ticker, quantity: qty, avg_price_buy: avgPrice, price_sell: saleValue, profit_loss: profit, date: date || new Date()
+  // Usado pelo Websocket/Polling para atualizar preços em tempo real
+  updateYields: (updates) => set((state) => {
+    const newPortfolio = state.portfolio.map((fii) => {
+      const updateData = updates.find((u) => u.id === fii.id);
+      if (updateData) {
+        return { 
+            ...fii, 
+            currentPrice: parseValue(updateData.currentPrice), 
+            dividendYield: parseValue(updateData.dividendYield), 
+            lastUpdated: updateData.lastUpdated 
+        };
+      }
+      return fii;
     });
+    return { portfolio: newPortfolio, metrics: calculateMetrics(newPortfolio) };
+  }),
+}));
 
-    await supabase.from('portfolio_transactions').insert({
-        user_id: user.id, ticker: ticker, quantity: qty, price: saleValue, date: date || new Date(), type: 'sell'
-    });
-
-    const newQty = currentQty - qty;
-    if (newQty > 0) {
-        await supabase.from('user_portfolio').update({ quantity: newQty }).eq('id', position.id);
-    } else {
-        await supabase.from('user_portfolio').delete().eq('id', position.id);
-    }
-    return { profit };
-  },
-
-  // 7. Histórico
-  async getEvolutionHistory() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return [];
-    const { data, error } = await supabase.from('portfolio_history').select('*').eq('user_id', user.id).order('snapshot_date', { ascending: true });
-    if (error) return [];
-    return data;
-  }
-};
+// ESTA LINHA É A QUE FALTAVA E CAUSAVA O ERRO:
+export default useCarteiraStore;
