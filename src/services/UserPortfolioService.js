@@ -18,7 +18,7 @@ export const PortfolioService = {
     return data;
   },
 
-  // 2. Buscar transações
+  // 2. Buscar histórico de transações
   async getTransactions(ticker) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
@@ -34,15 +34,15 @@ export const PortfolioService = {
     return data;
   },
 
-  // 3. ADICIONAR NOVA COMPRA (Lógica Blindada: Verifica -> Cria ou Atualiza)
+  // 3. ADICIONAR NOVA COMPRA (CORRIGIDO: Lógica robusta com Upsert)
   async addTransaction(asset) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuário não logado');
 
+    // Define o nome do investidor (Se vier vazio, vira 'Geral')
     const ownerName = asset.owner && asset.owner.trim() !== '' ? asset.owner.trim() : 'Geral';
-    console.log(`Tentando salvar ${asset.ticker} para: ${ownerName}`);
-
-    // A. Salvar Histórico
+    
+    // A. Salvar no Histórico (Log da Transação)
     const { error: transError } = await supabase
       .from('portfolio_transactions')
       .insert({
@@ -55,75 +55,61 @@ export const PortfolioService = {
         owner: ownerName
       });
 
-    if (transError) {
-        console.error("Erro ao salvar histórico:", transError);
-        throw transError;
-    }
+    if (transError) throw transError;
 
-    // B. Verificar se JÁ EXISTE esse ativo para ESSE DONO
-    const { data: existingAsset, error: fetchError } = await supabase
+    // B. Buscar Posição Atual (Busca pelo TICKER, independente do dono atual)
+    // Isso evita o erro de duplicidade que travou seu sistema
+    const { data: currentPosition } = await supabase
       .from('user_portfolio')
       .select('*')
       .eq('user_id', user.id)
       .eq('ticker', asset.ticker)
-      .eq('owner', ownerName)
       .maybeSingle();
 
-    if (fetchError) console.error("Erro ao buscar ativo existente:", fetchError);
+    let newQuantity = Number(asset.quantity);
+    let newAvgPrice = Number(asset.price);
+    let targetId = null; // Se continuar null, cria novo. Se tiver ID, atualiza.
 
-    // C. CAMINHO 1: JÁ EXISTE -> ATUALIZAR (Preço Médio)
-    if (existingAsset) {
-      console.log("Ativo já existe, calculando preço médio...");
-      const oldQty = Number(existingAsset.quantity);
-      const oldPrice = Number(existingAsset.price);
+    // C. Calcular Preço Médio (Se já existir)
+    if (currentPosition) {
+      targetId = currentPosition.id; // Pega o ID existente para não duplicar
+      
+      const oldQty = Number(currentPosition.quantity);
+      const oldPrice = Number(currentPosition.price);
       const addedQty = Number(asset.quantity);
       const addedPrice = Number(asset.price);
 
       const totalQty = oldQty + addedQty;
       const totalValue = (oldQty * oldPrice) + (addedQty * addedPrice);
-      const newAvgPrice = totalValue / totalQty;
-
-      const { data, error } = await supabase
-        .from('user_portfolio')
-        .update({
-            quantity: totalQty,
-            price: newAvgPrice,
-            last_dividend: asset.lastDividend || existingAsset.last_dividend,
-            fii_type: asset.fiiType || existingAsset.fii_type
-        })
-        .eq('id', existingAsset.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } 
-    
-    // D. CAMINHO 2: NÃO EXISTE -> CRIAR NOVO (Insert Puro)
-    else {
-      console.log("Ativo novo para este dono, criando...");
-      const { data, error } = await supabase
-        .from('user_portfolio')
-        .insert({
-          user_id: user.id,
-          ticker: asset.ticker,
-          quantity: Number(asset.quantity),
-          price: Number(asset.price),
-          sector: asset.sector || '',
-          purchase_date: asset.purchaseDate,
-          last_dividend: asset.lastDividend || 0,
-          fii_type: asset.fiiType || 'Indefinido',
-          owner: ownerName // <--- Salva o nome corretamente
-        })
-        .select()
-        .single();
-
-      if (error) {
-          console.error("Erro ao criar ativo:", error);
-          throw error;
-      }
-      return data;
+      
+      newQuantity = totalQty;
+      newAvgPrice = totalValue / totalQty;
     }
+
+    // D. Salvar na Carteira (Upsert Inteligente)
+    // Se targetId existe, ele ATUALIZA. Se não, ele CRIA.
+    const { data, error } = await supabase
+      .from('user_portfolio')
+      .upsert({
+        id: targetId, // O segredo está aqui: passar o ID evita o erro de duplicidade
+        user_id: user.id,
+        ticker: asset.ticker,
+        quantity: newQuantity,
+        price: newAvgPrice,
+        sector: asset.sector,
+        purchase_date: currentPosition?.purchase_date || asset.purchaseDate,
+        last_dividend: asset.lastDividend || currentPosition?.last_dividend || 0,
+        fii_type: asset.fiiType || currentPosition?.fii_type || 'Indefinido',
+        owner: ownerName // Atualiza o dono para o nome de quem comprou agora
+      })
+      .select()
+      .single();
+
+    if (error) {
+        console.error("Erro ao salvar na carteira:", error);
+        throw error;
+    }
+    return data;
   },
 
   // 4. Remover ativo
@@ -132,17 +118,16 @@ export const PortfolioService = {
     if (error) throw error;
   },
 
-  // 5. ATUALIZAR (Edição Manual - Corrigido para não travar no Geral)
+  // 5. ATUALIZAR (Edição Manual)
   async updateAsset(id, updates) {
-    // Prepara o objeto de atualização
+    // Prepara dados para atualizar
     const dataToUpdate = { ...updates };
     
-    // Se o campo owner vier vazio ou indefinido, a gente NÃO mexe nele (mantém o que está no banco)
-    // Se vier preenchido, a gente atualiza.
+    // Garante que o campo owner seja tratado corretamente
     if (updates.owner && updates.owner.trim() !== '') {
         dataToUpdate.owner = updates.owner.trim();
     } else {
-        delete dataToUpdate.owner; // Remove a chave para não salvar vazio
+        delete dataToUpdate.owner; 
     }
 
     const { data, error } = await supabase
@@ -161,12 +146,12 @@ export const PortfolioService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Login necessário');
 
+    // Busca pelo ticker e ID do usuário
     const { data: position } = await supabase
       .from('user_portfolio')
       .select('*')
       .eq('user_id', user.id)
       .eq('ticker', ticker)
-      .eq('owner', owner)
       .single();
 
     if (!position || Number(position.quantity) < Number(quantityToSell)) {
