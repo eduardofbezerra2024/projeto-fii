@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Helmet } from 'react-helmet';
-import { Plus, RefreshCw, Clock, Percent, Coins } from 'lucide-react'; 
+import { Plus, RefreshCw, Clock, Percent } from 'lucide-react'; 
 import { Button } from '@/components/ui/button';
 import CarteiraTable from '@/components/carteira/CarteiraTable';
 import AddFIIModal from '@/components/carteira/AddFIIModal';
@@ -16,7 +16,7 @@ const Carteira = () => {
     addFII, 
     updateFII, 
     removeFII, 
-    sellFII, // <--- 1. ADICIONADO AQUI
+    sellFII, 
     fetchPortfolio,
     updateYields,
     isLoading 
@@ -61,26 +61,37 @@ const Carteira = () => {
   };
   
   const handleSaveFII = async (fiiData) => {
-    if (editingFII) {
-      await updateFII(editingFII.id, fiiData);
-       toast({ title: 'Sucesso', description: `${fiiData.ticker} atualizado na carteira.` });
-    } else {
-      await addFII(fiiData);
-       toast({ title: 'Sucesso', description: `${fiiData.ticker} adicionado à carteira.` });
+    try {
+      if (editingFII) {
+        await updateFII(editingFII.id, fiiData);
+        toast({ title: 'Sucesso', description: `${fiiData.ticker} atualizado na carteira.` });
+      } else {
+        await addFII(fiiData);
+        toast({ title: 'Sucesso', description: `${fiiData.ticker} adicionado à carteira.` });
+      }
+    } catch (error) {
+      console.error(error);
+      // Aqui mostramos o erro para o usuário!
+      toast({ 
+        title: "Erro ao salvar", 
+        description: "Verifique se todos os campos estão preenchidos corretamente.", 
+        variant: "destructive" 
+      });
     }
   };
   
   const handleRemoveFII = async (id) => {
-    await removeFII(id);
-    toast({ title: 'Sucesso', description: 'FII removido da carteira' });
+    try {
+      await removeFII(id);
+      toast({ title: 'Sucesso', description: 'FII removido da carteira' });
+    } catch (error) {
+       toast({ title: "Erro", description: "Falha ao remover item.", variant: "destructive" });
+    }
   };
 
-  // --- 2. FUNÇÃO DE VENDA CRIADA AQUI ---
   const handleSellFII = async (saleData) => {
     try {
-      // O Modal devolve um objeto { ticker, quantity, price, date }
       await sellFII(saleData.ticker, saleData.quantity, saleData.price, saleData.date);
-      
       toast({ 
         title: 'Venda Realizada', 
         description: `Venda de ${saleData.quantity} cotas de ${saleData.ticker} registrada com sucesso.` 
@@ -94,7 +105,6 @@ const Carteira = () => {
       });
     }
   };
-  // -------------------------------------
 
   const handleRefreshYields = async () => {
     if (isUpdating) return;
@@ -197,10 +207,9 @@ const Carteira = () => {
           </div>
         </div>
         
-        {/* Lógica de Exibição Simplificada */}
+        {/* TABELA DE ATIVOS */}
         {portfolio.length > 0 ? (
             <div className="overflow-x-auto">
-                {/* 3. PROPRIEDADE onSell PASSADA AQUI 👇 */}
                 <CarteiraTable
                   portfolio={portfolio}
                   onEdit={handleEditFII}

@@ -64,7 +64,6 @@ const useCarteiraStore = create((set, get) => ({
         currentPrice: parseValue(item.currentPrice) || parseValue(item.price),
         last_dividend: parseValue(item.last_dividend),
         fii_type: item.fii_type,
-        // Garante que o campo owner seja lido
         owner: item.owner || 'Geral' 
       }));
 
@@ -88,29 +87,45 @@ const useCarteiraStore = create((set, get) => ({
       try { 
           await PortfolioService.addTransaction(fii); 
           get().fetchPortfolio(); 
-      } catch (e) { console.error(e); } 
+      } catch (e) { 
+          console.error(e);
+          throw e; // Lança o erro para a tela ver
+      } 
   },
   
   removeFII: async (id) => { 
       try { 
           await PortfolioService.removeAsset(id); 
-          const n = get().portfolio.filter((f) => f.id !== id); 
-          set({ portfolio: n, metrics: calculateMetrics(n) }); 
-      } catch (e) { throw e; } 
+          // Atualiza o estado local imediatamente
+          const newPortfolio = get().portfolio.filter((f) => f.id !== id); 
+          set({ 
+            portfolio: newPortfolio, 
+            metrics: calculateMetrics(newPortfolio) 
+          }); 
+      } catch (e) { 
+          console.error(e);
+          throw e; // Lança o erro para a tela ver
+      } 
   },
   
   updateFII: async (id, d) => { 
       try { 
           await PortfolioService.updateAsset(id, d); 
           get().fetchPortfolio(); 
-      } catch (e) { console.error(e); } 
+      } catch (e) { 
+          console.error(e);
+          throw e; // Lança o erro para a tela ver
+      } 
   },
   
   sellFII: async (t, q, p, d) => { 
       try { 
           await PortfolioService.sellAsset(t, q, p, d); 
           get().fetchPortfolio(); 
-      } catch (e) { throw e; } 
+      } catch (e) { 
+          console.error(e);
+          throw e; // Lança o erro para a tela ver
+      } 
   },
 
   calculateDividendHistory: async (portfolioData) => {
@@ -119,7 +134,6 @@ const useCarteiraStore = create((set, get) => ({
     
     const promises = portfolioData.map(async (asset) => {
         try {
-            // Busca histórico de dividendos na API
             const res = await fetch(`/api/dividend_history?ticker=${asset.ticker}`);
             const dividends = await res.json();
             
@@ -129,10 +143,9 @@ const useCarteiraStore = create((set, get) => ({
 
             dividends.forEach(div => {
                 const payDate = new Date(div.date);
-                // Só conta dividendos após a data de compra
                 if (payDate >= purchaseDate) {
                     const totalReceived = div.amount * (asset.quantity || 0);
-                    const monthKey = div.monthYear; // Ex: "jan/24"
+                    const monthKey = div.monthYear; 
 
                     if (!historyMap[monthKey]) historyMap[monthKey] = 0;
                     historyMap[monthKey] += totalReceived;
@@ -146,7 +159,6 @@ const useCarteiraStore = create((set, get) => ({
 
     await Promise.all(promises);
     
-    // Formata para os gráficos
     const chartData = Object.entries(historyMap).map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }));
     const assetChartData = Object.entries(assetMap).map(([ticker, value]) => ({ name: ticker, value: Number(value.toFixed(2)) })).sort((a, b) => b.value - a.value);
     
@@ -163,7 +175,6 @@ const useCarteiraStore = create((set, get) => ({
             valor: Number(item.total_value)
         }));
 
-        // Adiciona o valor atual ao final do gráfico
         const currentTotal = get().metrics.currentValue;
         if (currentTotal > 0) {
             formattedHistory.push({ name: 'Atual', fullDate: 'Hoje', valor: currentTotal });
@@ -173,7 +184,6 @@ const useCarteiraStore = create((set, get) => ({
     } catch (error) { console.error("Erro evolução:", error); }
   },
 
-  // Usado pelo Websocket/Polling para atualizar preços em tempo real
   updateYields: (updates) => set((state) => {
     const newPortfolio = state.portfolio.map((fii) => {
       const updateData = updates.find((u) => u.id === fii.id);
@@ -191,5 +201,4 @@ const useCarteiraStore = create((set, get) => ({
   }),
 }));
 
-// ESTA LINHA É A QUE FALTAVA E CAUSAVA O ERRO:
 export default useCarteiraStore;
