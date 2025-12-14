@@ -18,7 +18,7 @@ export const PortfolioService = {
     return data;
   },
 
-  // 2. Buscar histórico de transações de um ativo específico
+  // 2. Buscar transações
   async getTransactions(ticker) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
@@ -30,21 +30,19 @@ export const PortfolioService = {
       .eq('ticker', ticker)
       .order('date', { ascending: false });
     
-    if (error) {
-      console.error('Erro ao buscar transações:', error);
-      return [];
-    }
+    if (error) return [];
     return data;
   },
 
-  // 3. ADICIONAR UMA NOVA COMPRA (Com suporte a Investidor)
+  // 3. ADICIONAR NOVA COMPRA (Lógica Blindada: Verifica -> Cria ou Atualiza)
   async addTransaction(asset) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuário não logado');
 
-    const ownerName = asset.owner ? asset.owner.trim() : 'Geral';
+    const ownerName = asset.owner && asset.owner.trim() !== '' ? asset.owner.trim() : 'Geral';
+    console.log(`Tentando salvar ${asset.ticker} para: ${ownerName}`);
 
-    // A. Salvar no Histórico (Log da Transação)
+    // A. Salvar Histórico
     const { error: transError } = await supabase
       .from('portfolio_transactions')
       .insert({
@@ -54,80 +52,102 @@ export const PortfolioService = {
         price: asset.price,
         date: asset.purchaseDate || new Date(),
         type: 'buy',
-        owner: ownerName // Salva quem comprou no histórico
+        owner: ownerName
       });
 
-    if (transError) throw transError;
+    if (transError) {
+        console.error("Erro ao salvar histórico:", transError);
+        throw transError;
+    }
 
-    // B. Buscar posição atual DESTE INVESTIDOR ESPECÍFICO
-    const { data: currentPosition } = await supabase
+    // B. Verificar se JÁ EXISTE esse ativo para ESSE DONO
+    const { data: existingAsset, error: fetchError } = await supabase
       .from('user_portfolio')
       .select('*')
       .eq('user_id', user.id)
       .eq('ticker', asset.ticker)
-      .eq('owner', ownerName) // <--- O PULO DO GATO: Busca só as ações desse dono
-      .maybeSingle(); // Usa maybeSingle para não dar erro se não achar
+      .eq('owner', ownerName)
+      .maybeSingle();
 
-    let newQuantity = Number(asset.quantity);
-    let newAvgPrice = Number(asset.price);
+    if (fetchError) console.error("Erro ao buscar ativo existente:", fetchError);
 
-    // C. Cálculo do Preço Médio Ponderado
-    if (currentPosition) {
-      const oldQty = Number(currentPosition.quantity);
-      const oldPrice = Number(currentPosition.price);
+    // C. CAMINHO 1: JÁ EXISTE -> ATUALIZAR (Preço Médio)
+    if (existingAsset) {
+      console.log("Ativo já existe, calculando preço médio...");
+      const oldQty = Number(existingAsset.quantity);
+      const oldPrice = Number(existingAsset.price);
       const addedQty = Number(asset.quantity);
       const addedPrice = Number(asset.price);
 
       const totalQty = oldQty + addedQty;
       const totalValue = (oldQty * oldPrice) + (addedQty * addedPrice);
-      
-      newQuantity = totalQty;
-      newAvgPrice = totalValue / totalQty;
+      const newAvgPrice = totalValue / totalQty;
+
+      const { data, error } = await supabase
+        .from('user_portfolio')
+        .update({
+            quantity: totalQty,
+            price: newAvgPrice,
+            last_dividend: asset.lastDividend || existingAsset.last_dividend,
+            fii_type: asset.fiiType || existingAsset.fii_type
+        })
+        .eq('id', existingAsset.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } 
+    
+    // D. CAMINHO 2: NÃO EXISTE -> CRIAR NOVO (Insert Puro)
+    else {
+      console.log("Ativo novo para este dono, criando...");
+      const { data, error } = await supabase
+        .from('user_portfolio')
+        .insert({
+          user_id: user.id,
+          ticker: asset.ticker,
+          quantity: Number(asset.quantity),
+          price: Number(asset.price),
+          sector: asset.sector || '',
+          purchase_date: asset.purchaseDate,
+          last_dividend: asset.lastDividend || 0,
+          fii_type: asset.fiiType || 'Indefinido',
+          owner: ownerName // <--- Salva o nome corretamente
+        })
+        .select()
+        .single();
+
+      if (error) {
+          console.error("Erro ao criar ativo:", error);
+          throw error;
+      }
+      return data;
     }
-
-    // D. Atualizar ou Criar na Carteira Principal
-    const { data, error } = await supabase
-      .from('user_portfolio')
-      .upsert({
-        user_id: user.id,
-        id: currentPosition?.id, // Se achou, atualiza esse ID. Se não, cria novo.
-        ticker: asset.ticker,
-        quantity: newQuantity,
-        price: newAvgPrice,
-        sector: asset.sector,
-        purchase_date: currentPosition?.purchase_date || asset.purchaseDate,
-        last_dividend: asset.lastDividend || currentPosition?.last_dividend || 0,
-        fii_type: asset.fiiType || currentPosition?.fii_type || 'Indefinido',
-        owner: ownerName // <--- Salva o nome do investidor na carteira
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
   },
 
-  // 4. Remover ativo da carteira
+  // 4. Remover ativo
   async removeAsset(id) {
-    const { error, count } = await supabase
-      .from('user_portfolio')
-      .delete({ count: 'exact' })
-      .eq('id', id);
-
+    const { error } = await supabase.from('user_portfolio').delete().eq('id', id);
     if (error) throw error;
-    if (count === 0) {
-        throw new Error("Item não encontrado ou permissão negada.");
-    }
   },
 
-  // 5. Atualizar ativo manualmente (Edição direta - Suporta mudança de nome)
+  // 5. ATUALIZAR (Edição Manual - Corrigido para não travar no Geral)
   async updateAsset(id, updates) {
+    // Prepara o objeto de atualização
+    const dataToUpdate = { ...updates };
+    
+    // Se o campo owner vier vazio ou indefinido, a gente NÃO mexe nele (mantém o que está no banco)
+    // Se vier preenchido, a gente atualiza.
+    if (updates.owner && updates.owner.trim() !== '') {
+        dataToUpdate.owner = updates.owner.trim();
+    } else {
+        delete dataToUpdate.owner; // Remove a chave para não salvar vazio
+    }
+
     const { data, error } = await supabase
       .from('user_portfolio')
-      .update({
-        ...updates,
-        owner: updates.owner || 'Geral' // Garante que o nome seja salvo
-      })
+      .update(dataToUpdate)
       .eq('id', id)
       .select()
       .single();
@@ -136,85 +156,66 @@ export const PortfolioService = {
     return data;
   },
 
-  // 6. VENDER ATIVO (Agora respeitando o dono)
+  // 6. Vender Ativo
   async sellAsset(ticker, quantityToSell, sellPrice, date, owner = 'Geral') {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Login necessário');
 
-    // 1. Buscar a posição atual DO DONO ESPECÍFICO
     const { data: position } = await supabase
       .from('user_portfolio')
       .select('*')
       .eq('user_id', user.id)
       .eq('ticker', ticker)
-      .eq('owner', owner) // <--- Só vende o que é desse dono
+      .eq('owner', owner)
       .single();
 
     if (!position || Number(position.quantity) < Number(quantityToSell)) {
-        throw new Error(`Saldo insuficiente de ${ticker} para ${owner}.`);
+        throw new Error(`Saldo insuficiente.`);
     }
 
     const currentQty = Number(position.quantity);
     const avgPrice = Number(position.price);
-    const saleValue = Number(sellPrice);
-    const qty = Number(quantityToSell);
+    const profit = (Number(sellPrice) - avgPrice) * Number(quantityToSell);
 
-    // 2. Calcular Lucro/Prejuízo
-    const profit = (saleValue - avgPrice) * qty;
-
-    // 3. Salvar no Histórico de Lucros Realizados
+    // Salvar histórico de vendas
     await supabase.from('closed_positions').insert({
         user_id: user.id,
         ticker: ticker,
-        quantity: qty,
+        quantity: quantityToSell,
         avg_price_buy: avgPrice,
-        price_sell: saleValue,
+        price_sell: sellPrice,
         profit_loss: profit,
         date: date || new Date(),
-        owner: owner // Salva de quem foi o lucro
+        owner: owner
     });
 
-    // 4. Registrar a Transação no Histórico Geral
+    // Salvar transação
     await supabase.from('portfolio_transactions').insert({
         user_id: user.id,
         ticker: ticker,
-        quantity: qty,
-        price: saleValue,
+        quantity: quantityToSell,
+        price: sellPrice,
         date: date || new Date(),
         type: 'sell',
         owner: owner
     });
 
-    // 5. Atualizar a Carteira
-    const newQty = currentQty - qty;
-
+    // Atualizar saldo
+    const newQty = currentQty - Number(quantityToSell);
     if (newQty > 0) {
-        await supabase
-            .from('user_portfolio')
-            .update({ quantity: newQty })
-            .eq('id', position.id);
+        await supabase.from('user_portfolio').update({ quantity: newQty }).eq('id', position.id);
     } else {
-        await supabase
-            .from('user_portfolio')
-            .delete()
-            .eq('id', position.id);
+        await supabase.from('user_portfolio').delete().eq('id', position.id);
     }
 
     return { profit };
   },
 
-  // 7. Buscar Histórico de Evolução
+  // 7. Histórico Evolução
   async getEvolutionHistory() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
-
-    const { data, error } = await supabase
-      .from('portfolio_history')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('snapshot_date', { ascending: true });
-
-    if (error) return [];
-    return data;
+    const { data } = await supabase.from('portfolio_history').select('*').eq('user_id', user.id).order('snapshot_date');
+    return data || [];
   }
 };
