@@ -31,11 +31,14 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
       try {
         const divRes = await fetch(`/api/dividend?ticker=${ticker}`);
         const divData = await divRes.json();
+        
+        console.log("Dados da API:", divData); // Debug para ver o que chegou
 
-        // A. Preencher Último Provento
-        if (divData && divData.ultimoRendimento) {
-            // Limpa o valor (R$ 0,10 -> 0.10)
-            const cleanVal = divData.ultimoRendimento
+        // A. Preencher Último Provento (Tenta na raiz OU dentro de details)
+        const rendimentoBruto = divData.ultimoRendimento || divData.details?.ultimoRendimento;
+        
+        if (rendimentoBruto) {
+            const cleanVal = rendimentoBruto
                 .replace('R$', '')
                 .replace(/\s/g, '')
                 .replace(',', '.')
@@ -47,25 +50,25 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
             }
         }
         
-        // B. Preencher TIPO DO FUNDO (A Melhoria)
-        // Combina o "Tipo de Fundo" e o "Segmento" para tentar achar a melhor categoria
-        const rawType = (divData.fundType || '').toUpperCase();   // Ex: "FUNDO DE PAPEL"
-        const rawSeg = (divData.segmento || '').toUpperCase();    // Ex: "HÍBRIDO"
-        const combined = rawType + ' ' + rawSeg;
+        // B. Preencher TIPO DO FUNDO (Lógica Reforçada)
+        // Procura na raiz (API nova) OU dentro de details (API antiga/fallback)
+        const rawType = (divData.fundType || divData.details?.tipoFundo || '').toUpperCase();
+        const rawSeg = (divData.segmento || divData.details?.segmento || '').toUpperCase();
+        
+        const combined = `${rawType} ${rawSeg}`;
+        console.log("Texto analisado:", combined);
 
-        if (combined.includes('PAPEL') || combined.includes('RECEB') || combined.includes('CRI')) {
+        if (combined.includes('PAPEL') || combined.includes('RECEB') || combined.includes('CRI') || combined.includes('CR')) {
             setFiiType('Papel');
-        } else if (combined.includes('TIJOLO') || combined.includes('SHOPPING') || combined.includes('LOG') || combined.includes('LAJE') || combined.includes('IMOBIL')) {
+        } else if (combined.includes('TIJOLO') || combined.includes('SHOPPING') || combined.includes('LOG') || combined.includes('LAJE') || combined.includes('IMOBIL') || combined.includes('RENDA URBANA') || combined.includes('HOSPITAL') || combined.includes('HÍBRIDO') || combined.includes('MISTO')) {
             setFiiType('Tijolo');
-        } else if (combined.includes('FIAGRO') || combined.includes('AGRO')) {
+        } else if (combined.includes('FIAGRO') || combined.includes('AGRO') || combined.includes('RURAIS')) {
             setFiiType('Fiagro');
         } else if (combined.includes('INFRA')) {
             setFiiType('Infra');
-        } else if (combined.includes('HÍBRIDO') || combined.includes('MISTO')) {
-            // Se for híbrido, geralmente cai como Tijolo ou Papel dependendo da gestão, 
-            // mas vamos colocar Tijolo como padrão ou deixar Indefinido se preferir.
-            // Aqui vou colocar Tijolo pois a maioria dos híbridos tem imóveis.
-            setFiiType('Tijolo'); 
+        } else {
+            // Se não achou nada, mantém Indefinido
+            setFiiType('Indefinido');
         }
 
       } catch (errDiv) {
@@ -82,6 +85,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Garante data sem fuso horário (meio-dia)
     const purchaseDateObj = new Date(date + 'T12:00:00');
 
     const assetData = {
@@ -96,6 +100,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
 
     await onSave(assetData);
     
+    // Limpa o formulário
     setTicker('');
     setQuantity('');
     setPrice('');
@@ -207,12 +212,11 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
                 onChange={(e) => setFiiType(e.target.value)}
                 className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:ring-offset-slate-950 dark:placeholder:text-slate-400 dark:focus:ring-slate-300"
             >
-               <option value="Indefinido">Selecione</option>
+               <option value="Indefinido">Selecione (ou Indefinido)</option>
                <option value="Tijolo">🧱 Tijolo</option>
                <option value="Papel">📄 Papel</option>
                <option value="Fiagro">🌾 Fiagro</option>
                <option value="Infra">🏗️ Infra</option>
-               <option value="Indefinido">❓ Indefinido</option>
             </select>
           </div>
 
