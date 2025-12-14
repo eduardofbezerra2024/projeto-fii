@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/customSupabaseClient';
 
 export const PortfolioService = {
-  // 1. Buscar carteira (IGUAL AO SEU ORIGINAL)
+  // 1. Buscar carteira
   async getPortfolio() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
@@ -18,7 +18,7 @@ export const PortfolioService = {
     return data;
   },
 
-  // 2. Buscar transações (IGUAL AO SEU ORIGINAL)
+  // 2. Buscar transações
   async getTransactions(ticker) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];
@@ -34,12 +34,12 @@ export const PortfolioService = {
     return data;
   },
 
-  // 3. ADICIONAR COMPRA (SEU CÓDIGO + CAMPO OWNER)
+  // 3. ADICIONAR COMPRA (CORRIGIDO: FILTRA POR DONO)
   async addTransaction(asset) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Usuário não logado');
 
-    // Define o Dono (Se vazio, vira Geral)
+    // Define o Dono
     const ownerName = asset.owner && asset.owner.trim() !== '' ? asset.owner.trim() : 'Geral';
 
     // A. Salvar no Histórico
@@ -52,18 +52,19 @@ export const PortfolioService = {
         price: asset.price,
         date: asset.purchaseDate || new Date(),
         type: 'buy',
-        owner: ownerName // <--- ÚNICA MUDANÇA AQUI
+        owner: ownerName
       });
 
     if (transError) throw transError;
 
-    // B. Buscar posição atual (Pelo Ticker)
+    // B. Buscar posição atual (CONSIDERANDO O DONO AGORA!)
     const { data: currentPosition } = await supabase
       .from('user_portfolio')
       .select('*')
       .eq('user_id', user.id)
       .eq('ticker', asset.ticker)
-      .maybeSingle(); // Usei maybeSingle para evitar erros se não achar
+      .eq('owner', ownerName) // <--- O PULO DO GATO: Diferencia Eduardo de Barbosa
+      .maybeSingle();
 
     let newQuantity = Number(asset.quantity);
     let newAvgPrice = Number(asset.price);
@@ -82,13 +83,12 @@ export const PortfolioService = {
       newAvgPrice = totalValue / totalQty;
     }
 
-    // D. Atualizar ou Criar (Upsert)
-    // Mantive sua lógica original, só adicionei o campo owner no final
+    // D. Atualizar ou Criar
     const { data, error } = await supabase
       .from('user_portfolio')
       .upsert({
         user_id: user.id,
-        id: currentPosition?.id, // Importante: Se já existe, atualiza esse ID
+        id: currentPosition?.id, // Se achou (Ticker+Dono), atualiza. Se não, cria novo.
         ticker: asset.ticker,
         quantity: newQuantity,
         price: newAvgPrice,
@@ -96,19 +96,19 @@ export const PortfolioService = {
         purchase_date: currentPosition?.purchase_date || asset.purchaseDate,
         last_dividend: asset.lastDividend || currentPosition?.last_dividend || 0,
         fii_type: asset.fiiType || currentPosition?.fii_type || 'Indefinido',
-        owner: ownerName // <--- ÚNICA MUDANÇA AQUI (Salva o dono na carteira)
+        owner: ownerName 
       })
       .select()
       .single();
 
     if (error) {
-        console.error("Erro no Supabase:", error); // Log para te ajudar se der erro
+        console.error("Erro no Supabase:", error);
         throw error;
     }
     return data;
   },
 
-  // 4. Remover ativo (IGUAL AO SEU ORIGINAL)
+  // 4. Remover ativo
   async removeAsset(id) {
     const { error } = await supabase
       .from('user_portfolio')
@@ -118,13 +118,13 @@ export const PortfolioService = {
     if (error) throw error;
   },
 
-  // 5. Atualizar ativo (SEU CÓDIGO + CORREÇÃO PEQUENA)
+  // 5. Atualizar ativo
   async updateAsset(id, updates) {
     const { data, error } = await supabase
       .from('user_portfolio')
       .update({
           ...updates,
-          owner: updates.owner || 'Geral' // Garante que não salva vazio
+          owner: updates.owner || 'Geral'
       })
       .eq('id', id)
       .select()
@@ -134,21 +134,25 @@ export const PortfolioService = {
     return data;
   },
 
-  // 6. VENDER ATIVO (SEU CÓDIGO ORIGINAL)
-  async sellAsset(ticker, quantityToSell, sellPrice, date) {
+  // 6. VENDER ATIVO (CORRIGIDO: FILTRA POR DONO)
+  async sellAsset(ticker, quantityToSell, sellPrice, date, owner) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Login necessário');
 
-    // 1. Buscar a posição atual
+    // Define o Dono
+    const ownerName = owner && owner.trim() !== '' ? owner.trim() : 'Geral';
+
+    // 1. Buscar a posição atual (Ticker + Dono)
     const { data: position } = await supabase
       .from('user_portfolio')
       .select('*')
       .eq('user_id', user.id)
       .eq('ticker', ticker)
+      .eq('owner', ownerName) // <--- Busca o ativo do dono certo para vender
       .single();
 
     if (!position || Number(position.quantity) < Number(quantityToSell)) {
-        throw new Error('Saldo insuficiente para venda.');
+        throw new Error(`Saldo insuficiente para venda de ${ownerName}.`);
     }
 
     const currentQty = Number(position.quantity);
@@ -156,11 +160,10 @@ export const PortfolioService = {
     const saleValue = Number(sellPrice);
     const qty = Number(quantityToSell);
 
-    // 2. Calcular Lucro/Prejuízo
+    // 2. Calcular Lucro
     const profit = (saleValue - avgPrice) * qty;
 
     // 3. Histórico de Lucros
-    // Adicionei owner: position.owner para manter o histórico correto
     await supabase.from('closed_positions').insert({
         user_id: user.id,
         ticker: ticker,
@@ -169,7 +172,7 @@ export const PortfolioService = {
         price_sell: saleValue,
         profit_loss: profit,
         date: date || new Date(),
-        owner: position.owner 
+        owner: ownerName
     });
 
     // 4. Histórico de Transações
@@ -180,7 +183,7 @@ export const PortfolioService = {
         price: saleValue,
         date: date || new Date(),
         type: 'sell',
-        owner: position.owner
+        owner: ownerName
     });
 
     // 5. Atualizar Carteira
@@ -201,7 +204,7 @@ export const PortfolioService = {
     return { profit };
   },
 
-  // 7. Histórico Evolução (IGUAL AO SEU ORIGINAL)
+  // 7. Histórico Evolução
   async getEvolutionHistory() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return [];

@@ -1,3 +1,4 @@
+// ... (imports iguais) ...
 import React, { useState, useEffect, useMemo } from 'react';
 import { Helmet } from 'react-helmet';
 import { Plus, RefreshCw, Clock, Percent } from 'lucide-react'; 
@@ -10,17 +11,7 @@ import { YieldService } from '@/services/YieldService';
 import useCarteiraStore from '@/store/carteiraStore';
 
 const Carteira = () => {
-  const { 
-    portfolio, 
-    metrics, 
-    addFII, 
-    updateFII, 
-    removeFII, 
-    sellFII, 
-    fetchPortfolio,
-    updateYields,
-    isLoading 
-  } = useCarteiraStore();
+  const { portfolio, metrics, addFII, updateFII, removeFII, sellFII, fetchPortfolio, updateYields, isLoading } = useCarteiraStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFII, setEditingFII] = useState(null);
@@ -28,16 +19,12 @@ const Carteira = () => {
   const [lastUpdateDate, setLastUpdateDate] = useState(null);
 
   useEffect(() => {
-    if (portfolio.length === 0) {
-      fetchPortfolio();
-    }
+    if (portfolio.length === 0) fetchPortfolio();
   }, [fetchPortfolio, portfolio.length]);
 
   useEffect(() => {
     const storedDate = YieldService.getLastUpdate();
-    if (storedDate) {
-      setLastUpdateDate(new Date(storedDate));
-    }
+    if (storedDate) setLastUpdateDate(new Date(storedDate));
   }, []);
 
   const averageYield = useMemo(() => {
@@ -50,15 +37,8 @@ const Carteira = () => {
     return weightedSum / metrics.currentValue;
   }, [portfolio, metrics.currentValue]);
   
-  const handleAddFII = () => {
-    setEditingFII(null);
-    setIsModalOpen(true);
-  };
-  
-  const handleEditFII = (fii) => {
-    setEditingFII(fii);
-    setIsModalOpen(true);
-  };
+  const handleAddFII = () => { setEditingFII(null); setIsModalOpen(true); };
+  const handleEditFII = (fii) => { setEditingFII(fii); setIsModalOpen(true); };
   
   const handleSaveFII = async (fiiData) => {
     try {
@@ -71,12 +51,7 @@ const Carteira = () => {
       }
     } catch (error) {
       console.error(error);
-      // Aqui mostramos o erro para o usuário!
-      toast({ 
-        title: "Erro ao salvar", 
-        description: "Verifique se todos os campos estão preenchidos corretamente.", 
-        variant: "destructive" 
-      });
+      toast({ title: "Erro ao salvar", description: "Verifique os dados.", variant: "destructive" });
     }
   };
   
@@ -89,22 +64,21 @@ const Carteira = () => {
     }
   };
 
+  // --- FUNÇÃO DE VENDA ATUALIZADA ---
   const handleSellFII = async (saleData) => {
     try {
-      await sellFII(saleData.ticker, saleData.quantity, saleData.price, saleData.date);
+      // Passando o OWNER para garantir que venda o certo
+      await sellFII(saleData.ticker, saleData.quantity, saleData.price, saleData.date, saleData.owner);
       toast({ 
         title: 'Venda Realizada', 
-        description: `Venda de ${saleData.quantity} cotas de ${saleData.ticker} registrada com sucesso.` 
+        description: `Venda de ${saleData.quantity} cotas de ${saleData.ticker} (${saleData.owner || 'Geral'}) registrada.` 
       });
     } catch (error) {
       console.error(error);
-      toast({ 
-        title: "Erro na venda", 
-        description: error.message || "Não foi possível realizar a venda.", 
-        variant: "destructive" 
-      });
+      toast({ title: "Erro na venda", description: error.message, variant: "destructive" });
     }
   };
+  // ---------------------------------
 
   const handleRefreshYields = async () => {
     if (isUpdating) return;
@@ -112,18 +86,16 @@ const Carteira = () => {
       toast({ title: "Carteira vazia", description: "Adicione FIIs para atualizar." });
       return;
     }
-
     setIsUpdating(true);
     try {
       const updates = await YieldService.updatePortfolioYields(portfolio);
-      
       if (updates.length > 0) {
         updateYields(updates);
         YieldService.setLastUpdate();
         setLastUpdateDate(new Date());
-        toast({ title: "Atualizado", description: "Yields e preços atualizados com sucesso." });
+        toast({ title: "Atualizado", description: "Yields e preços atualizados." });
       } else {
-        toast({ title: "Sem atualizações", description: "Não foi possível obter novos dados no momento." });
+        toast({ title: "Sem atualizações", description: "Dados já recentes." });
       }
     } catch (error) {
       console.error(error);
@@ -135,10 +107,7 @@ const Carteira = () => {
   
   return (
     <>
-      <Helmet>
-        <title>Carteira - FII Analyzer</title>
-      </Helmet>
-      
+      <Helmet><title>Carteira - FII Analyzer</title></Helmet>
       <div className="space-y-6 pb-20">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -156,90 +125,56 @@ const Carteira = () => {
               )}
             </div>
           </div>
-          
           <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-            <Button
-              variant="outline"
-              onClick={handleRefreshYields}
-              disabled={isUpdating}
-              className="gap-2 flex-1 sm:flex-none"
-            >
+            <Button variant="outline" onClick={handleRefreshYields} disabled={isUpdating} className="gap-2 flex-1 sm:flex-none">
               <RefreshCw className={`h-4 w-4 ${isUpdating ? 'animate-spin' : ''}`} />
               <span className="sm:hidden">Atualizar</span>
               <span className="hidden sm:inline">{isUpdating ? 'Atualizando...' : 'Atualizar Yields'}</span>
             </Button>
-            
             <Button onClick={handleAddFII} className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-none">
-              <Plus className="h-5 w-5 mr-2" />
-              Adicionar
+              <Plus className="h-5 w-5 mr-2" /> Adicionar
             </Button>
           </div>
         </div>
         
-        {/* GRID DE MÉTRICAS */}
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Total Investido</p>
-            <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
-              {isLoading ? "..." : formatCurrency(metrics.totalInvested)}
-            </p>
+            <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">{isLoading ? "..." : formatCurrency(metrics.totalInvested)}</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Valor Atual</p>
-            <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
-               {isLoading ? "..." : formatCurrency(metrics.currentValue)}
-            </p>
+            <p className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">{isLoading ? "..." : formatCurrency(metrics.currentValue)}</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Yield Médio</p>
             <div className="flex items-center">
                 <Percent className="h-4 w-4 text-blue-500 mr-1" />
-                <p className="text-lg sm:text-2xl font-bold text-blue-600 dark:text-blue-400 truncate">
-                {(averageYield > 1 ? averageYield : averageYield * 100).toFixed(2)}%
-                </p>
+                <p className="text-lg sm:text-2xl font-bold text-blue-600 dark:text-blue-400 truncate">{(averageYield > 1 ? averageYield : averageYield * 100).toFixed(2)}%</p>
             </div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700">
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">Lucro/Prejuízo</p>
-            <p className={`text-lg sm:text-2xl font-bold truncate ${metrics.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {isLoading ? "..." : formatCurrency(metrics.profitLoss)}
-            </p>
+            <p className={`text-lg sm:text-2xl font-bold truncate ${metrics.profitLoss >= 0 ? 'text-green-600' : 'text-red-600'}`}>{isLoading ? "..." : formatCurrency(metrics.profitLoss)}</p>
           </div>
         </div>
         
-        {/* TABELA DE ATIVOS */}
         {portfolio.length > 0 ? (
             <div className="overflow-x-auto">
-                <CarteiraTable
-                  portfolio={portfolio}
-                  onEdit={handleEditFII}
-                  onRemove={handleRemoveFII}
-                  onSell={handleSellFII} 
-                />
+                <CarteiraTable portfolio={portfolio} onEdit={handleEditFII} onRemove={handleRemoveFII} onSell={handleSellFII} />
             </div>
         ) : (
           <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 mx-4 sm:mx-0">
-            {isLoading ? (
-               <p className="text-gray-500">Carregando carteira...</p>
-            ) : (
+            {isLoading ? <p className="text-gray-500">Carregando carteira...</p> : (
               <>
                 <h3 className="text-xl font-medium text-gray-900 dark:text-white">Sua carteira está vazia</h3>
                 <p className="text-gray-500 dark:text-gray-400 mt-2 px-4">Adicione seu primeiro FII para começar a análise.</p>
-                <Button onClick={handleAddFII} className="mt-6 bg-green-600 hover:bg-green-700">
-                  <Plus className="h-5 w-5 mr-2" />
-                  Adicionar FII
-                </Button>
+                <Button onClick={handleAddFII} className="mt-6 bg-green-600 hover:bg-green-700"><Plus className="h-5 w-5 mr-2" /> Adicionar FII</Button>
               </>
             )}
           </div>
         )}
-        
-        <AddFIIModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          onSave={handleSaveFII}
-          editingFII={editingFII}
-        />
+        <AddFIIModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveFII} editingFII={editingFII} />
       </div>
     </>
   );

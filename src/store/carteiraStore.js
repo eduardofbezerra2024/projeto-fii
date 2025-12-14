@@ -1,15 +1,12 @@
 import { create } from 'zustand';
 import { PortfolioService } from '@/services/UserPortfolioService';
 
-// Função auxiliar para limpar números (R$ 1.000,00 -> 1000.00)
 const parseValue = (value) => {
   if (value === null || value === undefined) return 0;
   if (typeof value === 'number') return value;
   let str = String(value).trim();
   if (str === '') return 0;
-  // Remove R$ e espaços
   str = str.replace('R$', '').trim();
-  // Se tiver vírgula, assume formato PT-BR (remove ponto de milhar, troca vírgula por ponto)
   if (str.includes(',')) {
     str = str.replace(/\./g, '').replace(',', '.');
   } 
@@ -17,7 +14,6 @@ const parseValue = (value) => {
   return isNaN(result) ? 0 : result;
 };
 
-// Calcula totais da carteira
 const calculateMetrics = (portfolio) => {
   let totalInvested = 0;
   let currentValue = 0;
@@ -27,8 +23,6 @@ const calculateMetrics = (portfolio) => {
     const qty = parseValue(fii.quantity);
     const pricePaid = parseValue(fii.price); 
     const currPrice = parseValue(fii.currentPrice);
-    
-    // Se preço atual for 0 ou inválido, usa o preço pago para não zerar o gráfico
     const finalCurrentPrice = currPrice > 0 ? currPrice : pricePaid;
     const dividend = parseValue(fii.last_dividend);
 
@@ -49,13 +43,10 @@ const useCarteiraStore = create((set, get) => ({
   evolutionHistory: [],
   isLoading: false,
 
-  // Ação principal: Buscar dados do banco
   fetchPortfolio: async () => {
     set({ isLoading: true });
     try {
       const data = await PortfolioService.getPortfolio();
-      
-      // Formata os dados vindos do banco
       const formatted = data.map(item => ({
         ...item,
         id: item.id,
@@ -73,7 +64,6 @@ const useCarteiraStore = create((set, get) => ({
         isLoading: false 
       });
 
-      // Dispara cálculos secundários
       get().calculateDividendHistory(formatted);
       get().fetchEvolutionHistory();
 
@@ -89,22 +79,18 @@ const useCarteiraStore = create((set, get) => ({
           get().fetchPortfolio(); 
       } catch (e) { 
           console.error(e);
-          throw e; // Lança o erro para a tela ver
+          throw e; 
       } 
   },
   
   removeFII: async (id) => { 
       try { 
           await PortfolioService.removeAsset(id); 
-          // Atualiza o estado local imediatamente
-          const newPortfolio = get().portfolio.filter((f) => f.id !== id); 
-          set({ 
-            portfolio: newPortfolio, 
-            metrics: calculateMetrics(newPortfolio) 
-          }); 
+          const n = get().portfolio.filter((f) => f.id !== id); 
+          set({ portfolio: n, metrics: calculateMetrics(n) }); 
       } catch (e) { 
           console.error(e);
-          throw e; // Lança o erro para a tela ver
+          throw e; 
       } 
   },
   
@@ -114,72 +100,62 @@ const useCarteiraStore = create((set, get) => ({
           get().fetchPortfolio(); 
       } catch (e) { 
           console.error(e);
-          throw e; // Lança o erro para a tela ver
+          throw e; 
       } 
   },
   
-  sellFII: async (t, q, p, d) => { 
+  // ATUALIZADO: Recebe o Owner agora
+  sellFII: async (t, q, p, d, owner) => { 
       try { 
-          await PortfolioService.sellAsset(t, q, p, d); 
+          await PortfolioService.sellAsset(t, q, p, d, owner); 
           get().fetchPortfolio(); 
       } catch (e) { 
           console.error(e);
-          throw e; // Lança o erro para a tela ver
+          throw e; 
       } 
   },
 
   calculateDividendHistory: async (portfolioData) => {
     const historyMap = {};
     const assetMap = {};
-    
     const promises = portfolioData.map(async (asset) => {
         try {
             const res = await fetch(`/api/dividend_history?ticker=${asset.ticker}`);
             const dividends = await res.json();
-            
             if (!Array.isArray(dividends)) return;
 
             const purchaseDate = asset.purchase_date ? new Date(asset.purchase_date) : new Date();
-
             dividends.forEach(div => {
                 const payDate = new Date(div.date);
                 if (payDate >= purchaseDate) {
                     const totalReceived = div.amount * (asset.quantity || 0);
                     const monthKey = div.monthYear; 
-
                     if (!historyMap[monthKey]) historyMap[monthKey] = 0;
                     historyMap[monthKey] += totalReceived;
-
                     if (!assetMap[asset.ticker]) assetMap[asset.ticker] = 0;
                     assetMap[asset.ticker] += totalReceived;
                 }
             });
         } catch (err) { console.error(err); }
     });
-
     await Promise.all(promises);
-    
     const chartData = Object.entries(historyMap).map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }));
     const assetChartData = Object.entries(assetMap).map(([ticker, value]) => ({ name: ticker, value: Number(value.toFixed(2)) })).sort((a, b) => b.value - a.value);
-    
     set({ dividendHistory: chartData, dividendByAsset: assetChartData });
   },
 
   fetchEvolutionHistory: async () => {
     try {
         const historyData = await PortfolioService.getEvolutionHistory();
-        
         const formattedHistory = historyData.map(item => ({
             name: new Date(item.snapshot_date).toLocaleDateString('pt-BR', { month: 'short' }),
             fullDate: new Date(item.snapshot_date).toLocaleDateString('pt-BR'),
             valor: Number(item.total_value)
         }));
-
         const currentTotal = get().metrics.currentValue;
         if (currentTotal > 0) {
             formattedHistory.push({ name: 'Atual', fullDate: 'Hoje', valor: currentTotal });
         }
-
         set({ evolutionHistory: formattedHistory });
     } catch (error) { console.error("Erro evolução:", error); }
   },

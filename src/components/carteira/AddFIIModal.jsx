@@ -3,13 +3,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Search, User, Loader2 } from 'lucide-react';
+import { Search, User, Loader2, ExternalLink, Coins } from 'lucide-react';
 import { getFiiQuote } from '@/services/fiiService';
 
 const AddFIIModal = ({ isOpen, onClose, onSave }) => {
   const [ticker, setTicker] = useState('');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
+  // Data inicial: Hoje (formato YYYY-MM-DD para o input funcionar)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [lastDividend, setLastDividend] = useState('');
   const [fiiType, setFiiType] = useState('Indefinido');
@@ -32,47 +33,29 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
         const divRes = await fetch(`/api/dividend?ticker=${ticker}`);
         const divData = await divRes.json();
         
-        console.log("Dados da API:", divData); // Debug para ver o que chegou
-
-        // A. Preencher Último Provento (Tenta na raiz OU dentro de details)
-        const rendimentoBruto = divData.ultimoRendimento || divData.details?.ultimoRendimento;
-        
+        // A. Preencher Último Provento
+        const rendimentoBruto = divData.dividend || divData.ultimoRendimento || divData.details?.ultimoRendimento;
         if (rendimentoBruto) {
-            const cleanVal = rendimentoBruto
-                .replace('R$', '')
-                .replace(/\s/g, '')
-                .replace(',', '.')
-                .trim();
-            
-            const numVal = parseFloat(cleanVal);
-            if (!isNaN(numVal)) {
-                setLastDividend(numVal);
-            }
+             // Se vier número direto ou string
+             const val = typeof rendimentoBruto === 'number' ? rendimentoBruto : parseFloat(rendimentoBruto.replace('R$', '').replace(',', '.').trim());
+             if (!isNaN(val)) setLastDividend(val);
         }
         
-        // B. Preencher TIPO DO FUNDO (Lógica Reforçada)
-        // Procura na raiz (API nova) OU dentro de details (API antiga/fallback)
-        const rawType = (divData.fundType || divData.details?.tipoFundo || '').toUpperCase();
-        const rawSeg = (divData.segmento || divData.details?.segmento || '').toUpperCase();
+        // B. Preencher TIPO DO FUNDO
+        const rawType = (divData.fundType || divData.details?.tipoFundo || data.sector || '').toUpperCase();
         
-        const combined = `${rawType} ${rawSeg}`;
-        console.log("Texto analisado:", combined);
-
-        if (combined.includes('PAPEL') || combined.includes('RECEB') || combined.includes('CRI') || combined.includes('CR')) {
+        if (rawType.includes('PAPEL') || rawType.includes('RECEB') || rawType.includes('CRI')) {
             setFiiType('Papel');
-        } else if (combined.includes('TIJOLO') || combined.includes('SHOPPING') || combined.includes('LOG') || combined.includes('LAJE') || combined.includes('IMOBIL') || combined.includes('RENDA URBANA') || combined.includes('HOSPITAL') || combined.includes('HÍBRIDO') || combined.includes('MISTO')) {
+        } else if (rawType.includes('TIJOLO') || rawType.includes('SHOPPING') || rawType.includes('LOG') || rawType.includes('LAJE') || rawType.includes('HÍBRIDO')) {
             setFiiType('Tijolo');
-        } else if (combined.includes('FIAGRO') || combined.includes('AGRO') || combined.includes('RURAIS')) {
+        } else if (rawType.includes('FIAGRO') || rawType.includes('AGRO')) {
             setFiiType('Fiagro');
-        } else if (combined.includes('INFRA')) {
+        } else if (rawType.includes('INFRA')) {
             setFiiType('Infra');
-        } else {
-            // Se não achou nada, mantém Indefinido
-            setFiiType('Indefinido');
         }
 
       } catch (errDiv) {
-        console.warn("Não foi possível buscar dados do Investidor10", errDiv);
+        console.warn("Erro ao buscar dados complementares", errDiv);
       }
 
     } catch (error) {
@@ -119,6 +102,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
         
         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
           
+          {/* CAMPO INVESTIDOR */}
           <div className="grid gap-2">
             <Label htmlFor="owner" className="flex items-center gap-2 text-blue-600">
                 <User className="h-4 w-4" /> Nome do Investidor
@@ -132,6 +116,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
             />
           </div>
 
+          {/* TICKER */}
           <div className="grid gap-2">
             <Label htmlFor="ticker">Ticker (Código)</Label>
             <div className="flex gap-2">
@@ -139,6 +124,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
                 id="ticker"
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                onBlur={handleSearchTicker}
                 placeholder="EX: MXRF11"
                 required
                 />
@@ -148,13 +134,13 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
                     variant="outline" 
                     onClick={handleSearchTicker} 
                     disabled={loadingSearch}
-                    title="Buscar Dados Automáticos"
                 >
                     {loadingSearch ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 </Button>
             </div>
           </div>
 
+          {/* QUANTIDADE E PREÇO */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
               <Label htmlFor="quantity">Quantidade</Label>
@@ -181,6 +167,7 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
             </div>
           </div>
 
+          {/* DATA E PROVENTO */}
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-2">
                 <Label htmlFor="date">Data Compra</Label>
@@ -193,26 +180,42 @@ const AddFIIModal = ({ isOpen, onClose, onSave }) => {
                 />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="dividend">Último Provento</Label>
-              <Input
-                id="dividend"
-                type="number"
-                step="0.0001"
-                value={lastDividend}
-                onChange={(e) => setLastDividend(e.target.value)}
-                placeholder="0.00"
-              />
+              <div className="flex justify-between items-center mb-1">
+                  <Label>Último Provento</Label>
+                  {ticker.length >= 4 && (
+                      <a 
+                          href={`https://statusinvest.com.br/fundos-imobiliarios/${ticker.toLowerCase()}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-gray-400 hover:text-blue-500 flex items-center gap-1 cursor-pointer"
+                      >
+                          Ver <ExternalLink className="h-3 w-3" />
+                      </a>
+                  )}
+              </div>
+              <div className="relative">
+                  <Input
+                    id="dividend"
+                    type="number"
+                    step="0.0001"
+                    value={lastDividend}
+                    onChange={(e) => setLastDividend(e.target.value)}
+                    placeholder="0.00"
+                  />
+                  <Coins className="absolute right-3 top-2.5 h-4 w-4 text-gray-400 opacity-50" />
+              </div>
             </div>
           </div>
 
+          {/* TIPO */}
           <div className="grid gap-2">
             <Label htmlFor="type">Tipo do Fundo</Label>
             <select 
                 value={fiiType} 
                 onChange={(e) => setFiiType(e.target.value)}
-                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-950 dark:ring-offset-slate-950 dark:placeholder:text-slate-400 dark:focus:ring-slate-300"
+                className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2"
             >
-               <option value="Indefinido">Selecione (ou Indefinido)</option>
+               <option value="Indefinido">Selecione</option>
                <option value="Tijolo">🧱 Tijolo</option>
                <option value="Papel">📄 Papel</option>
                <option value="Fiagro">🌾 Fiagro</option>
