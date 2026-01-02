@@ -46,7 +46,7 @@ export const searchFii = async (ticker) => {
 };
 
 /**
- * Busca histórico de dividendos.
+ * Busca histórico de dividendos (usado para calcular yield manual se necessário).
  */
 export const getFiiDividendHistory = async (ticker) => {
   try {
@@ -66,7 +66,7 @@ export const getFiiDividendHistory = async (ticker) => {
             value: div.rate
         }))
         .sort((a, b) => new Date(b.date) - new Date(a.date)) // Mais recentes primeiro
-        .slice(0, 12); // Pega os últimos 12
+        .slice(0, 12); // Pega os últimos 12 meses
   } catch (error) {
     console.error("getFiiDividendHistory error:", error);
     return [];
@@ -74,7 +74,8 @@ export const getFiiDividendHistory = async (ticker) => {
 };
 
 /**
- * Busca cotação e AGORA CALCULA O YIELD SE PRECISAR.
+ * Busca cotação, yield e metadados.
+ * ATUALIZADO: Não força mais 'Fundo Imobiliário' se for Ação/BDR.
  */
 export const getFiiQuote = async (ticker) => {
   try {
@@ -93,7 +94,6 @@ export const getFiiQuote = async (ticker) => {
 
     // Se a API mandou ZERO ou NADA, a gente calcula na mão!
     if (!finalYield || finalYield === 0) {
-        console.log(`Yield zerado para ${ticker}. Calculando manualmente...`);
         try {
             // Busca o histórico dos últimos 12 meses
             const dividends = await getFiiDividendHistory(ticker);
@@ -116,31 +116,33 @@ export const getFiiQuote = async (ticker) => {
     }
     // --------------------------------
 
-    // Tratamento de Setor
-    let sector = result.sector;
-    if (!sector && result.longName) {
-      const longNameLower = result.longName.toLowerCase();
-      if (longNameLower.includes('imobiliário') || longNameLower.includes('imobiliario')) {
-        sector = 'Fundo Imobiliário';
-      } else if (longNameLower.includes('renda fixa')) {
-        sector = 'Renda Fixa';
-      }
+    // --- TRATAMENTO DE SETOR (ATUALIZADO PARA AÇÕES/BDRs) ---
+    // Antes forçava 'Fundo Imobiliário'. Agora respeita o que a API mandar.
+    let sector = result.sector || 'Indefinido';
+    const longNameLower = (result.longName || '').toLowerCase();
+
+    // Só força Fundo Imobiliário se o nome deixar isso muito óbvio e o setor estiver vazio
+    if (sector === 'Indefinido' || sector === '') {
+        if (longNameLower.includes('imobiliário') || longNameLower.includes('imobiliario') || longNameLower.includes('fii')) {
+            sector = 'Fundo Imobiliário';
+        }
     }
-    if (!sector) sector = 'Fundo Imobiliário';
+    // --------------------------------------------------------
 
     return {
       price: currentPrice,
       vpa: result.bookValue || 0,
-      dividendYield: finalYield, // Agora vai com o valor calculado se precisar
-      sector: sector,
+      dividendYield: finalYield,
+      sector: sector, // Agora retorna setores de Ações corretamente (ex: Energy, Technology)
       liquidity: result.liquidity || 'Não informado',
       name: result.longName || 'Nome não disponível',
+      currency: result.currency || 'BRL' // Útil para BDRs se vier em USD (raro na B3, mas bom ter)
     };
   } catch (error) {
     console.error("getFiiQuote error:", error);
     toast({
-        title: 'Erro ao buscar FII',
-        description: error.message,
+        title: 'Erro ao buscar ativo',
+        description: `Não foi possível encontrar dados para ${ticker}`,
         variant: 'destructive',
     });
     return null;
