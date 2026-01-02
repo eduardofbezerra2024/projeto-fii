@@ -67,7 +67,7 @@ export default async function handler(req, res) {
     // 5. Envia o E-mail
     const emailResponse = await resend.emails.send({
       from: 'FII Analyzer <onboarding@resend.dev>',
-      to: process.env.MY_EMAIL, // Vai para o seu e-mail configurado no .env
+      to: process.env.MY_EMAIL.split(','), // Vai para o seu e-mail configurado no .env
       subject: `📈 Notícias: ${uniqueTickers.slice(0, 3).join(', ')} e mais...`,
       html: emailHtml,
     });
