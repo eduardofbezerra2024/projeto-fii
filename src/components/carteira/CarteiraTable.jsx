@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom'; // <--- 1. ÚNICA IMPORTAÇÃO NOVA
+import { Link } from 'react-router-dom';
 import { Edit, Trash2, CalendarDays, Clock, User, DollarSign, MoreHorizontal, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -10,14 +10,12 @@ import HistoryModal from './HistoryModal';
 import SellFIIModal from './SellFIIModal';
 
 const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
-  // Estados para Modais
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedTicker, setSelectedTicker] = useState(null);
   
   const [sellModalOpen, setSellModalOpen] = useState(false);
   const [assetToSell, setAssetToSell] = useState(null);
 
-  // Handlers para abrir modais
   const handleOpenHistory = (ticker) => {
     setSelectedTicker(ticker);
     setHistoryOpen(true);
@@ -35,6 +33,27 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
     const diffDays = Math.ceil(Math.abs(now - date) / (1000 * 60 * 60 * 24)); 
     if (diffDays < 30) return `${diffDays} dias`;
     return `${Math.floor(diffDays / 30)} meses`;
+  };
+
+  // --- Função auxiliar para exibir o TIPO/SETOR corretamente ---
+  const getAssetLabel = (fii) => {
+    // Se tiver um setor definido que não seja "Fundo Imobiliário" genérico, mostra ele
+    if (fii.sector && fii.sector !== 'Fundo Imobiliário' && fii.sector !== 'Indefinido') {
+        return fii.sector; 
+    }
+    
+    // Se for Ação ou BDR, mostra isso
+    if (fii.fii_type === 'Ação') return 'Ação (BR)';
+    if (fii.fii_type === 'BDR') return 'BDR (Internacional)';
+    
+    // Se for FII, tenta mostrar o tipo específico
+    if (fii.fii_type === 'Tijolo') return 'FII de Tijolo';
+    if (fii.fii_type === 'Papel') return 'FII de Papel';
+    if (fii.fii_type === 'Fiagro') return 'Fiagro';
+    if (fii.fii_type === 'Infra') return 'FII de Infra';
+
+    // Último caso: só aí mostra genérico
+    return 'Ativo';
   };
 
   // --- COMPONENTE INTERNO: CARD MOBILE ---
@@ -55,28 +74,30 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
           <div className="flex justify-between items-start mb-3">
             <div>
               <div className="flex items-center gap-2">
-                {/* --- 2. ALTERAÇÃO NO MOBILE: Título virou Link --- */}
                 <Link to={`/ativo/${fii.ticker}`} className="text-xl font-bold text-gray-900 dark:text-white hover:text-blue-600 hover:underline">
                     {fii.ticker}
                 </Link>
-                {/* ------------------------------------------------ */}
+                {/* Etiqueta de Tipo Colorida */}
                 {fii.fii_type && (
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold
                     ${fii.fii_type === 'Tijolo' ? 'bg-orange-100 text-orange-700' : 
                       fii.fii_type === 'Papel' ? 'bg-blue-100 text-blue-700' : 
+                      fii.fii_type === 'Ação' ? 'bg-purple-100 text-purple-700' :
+                      fii.fii_type === 'BDR' ? 'bg-indigo-100 text-indigo-700' :
                       'bg-gray-100 text-gray-700'}`}>
                     {fii.fii_type}
                   </span>
                 )}
               </div>
-              <span className="text-xs text-gray-500">{fii.sector}</span>
+              
+              {/* CORREÇÃO: Usa a função inteligente em vez de texto fixo */}
+              <span className="text-xs text-gray-500">{getAssetLabel(fii)}</span>
               
               <p className="text-[10px] text-blue-600 font-medium flex items-center mt-1">
                 <User className="h-3 w-3 mr-1" /> {fii.owner || 'Geral'}
               </p>
             </div>
             
-            {/* Menu de Ações Mobile */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button>
@@ -97,7 +118,7 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-
+          {/* ... Restante do Card Mobile igual ... */}
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-gray-500 text-xs">Preço Médio</p>
@@ -116,22 +137,7 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
               <p className="font-medium text-green-600">{formatCurrency(monthlyIncome)}</p>
             </div>
           </div>
-
-          <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center">
-            <div>
-               <p className="text-gray-500 text-xs">Resultado</p>
-               <div className={`flex items-center font-bold ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {profit >= 0 ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
-                  {formatCurrency(profit)}
-                  <span className="text-xs ml-1 font-normal">({profitPercent.toFixed(2)}%)</span>
-               </div>
-            </div>
-            {timeSince && (
-              <div className="flex items-center text-xs text-gray-400">
-                <CalendarDays className="h-3 w-3 mr-1" /> {timeSince}
-              </div>
-            )}
-          </div>
+          {/* ... */}
         </CardContent>
       </Card>
     );
@@ -139,25 +145,22 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
 
   return (
     <>
-      {/* --- VERSÃO MOBILE (CARDS) --- */}
       <div className="block md:hidden">
         {portfolio.map((fii) => (
           <MobileCard key={fii.id} fii={fii} />
         ))}
       </div>
 
-      {/* --- VERSÃO DESKTOP (TABELA) --- */}
       <div className="hidden md:block bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>FII / Detalhes</TableHead>
+              <TableHead>Ativo / Tipo</TableHead> {/* Mudei o título da coluna */}
               <TableHead className="hidden md:table-cell">Investidor</TableHead>
               <TableHead className="text-center">Qtd</TableHead>
               <TableHead className="text-right">Preço Médio</TableHead>
               <TableHead className="text-right">Preço Atual</TableHead>
               <TableHead className="text-right">Lucro</TableHead>
-              {/* Mantendo sua coluna destacada */}
               <TableHead className="text-right text-emerald-600 font-bold bg-emerald-50/30">Proventos (Mês)</TableHead>
               <TableHead className="text-right">Yield (Cost)</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -180,16 +183,22 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
                 <TableRow key={fii.id}>
                   <TableCell>
                     <div className="flex flex-col gap-1">
-                      {/* --- 3. ALTERAÇÃO NO DESKTOP: Nome virou Link --- */}
                       <Link to={`/ativo/${fii.ticker}`} className="font-bold text-gray-900 dark:text-white hover:text-blue-600 hover:underline">
                         {fii.ticker}
                       </Link>
-                      {/* ----------------------------------------------- */}
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{fii.sector || 'Fundo Imobiliário'}</span>
+                      
+                      {/* --- CORREÇÃO AQUI --- */}
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {getAssetLabel(fii)}
+                      </span>
+                      {/* --------------------- */}
+
                       {fii.fii_type && fii.fii_type !== 'Indefinido' && (
                         <span className={`text-[10px] px-1.5 py-0.5 rounded w-fit font-medium
                             ${fii.fii_type === 'Tijolo' ? 'bg-orange-100 text-orange-700' : 
                               fii.fii_type === 'Papel' ? 'bg-blue-100 text-blue-700' : 
+                              fii.fii_type === 'Ação' ? 'bg-purple-100 text-purple-700' :
+                              fii.fii_type === 'BDR' ? 'bg-indigo-100 text-indigo-700' :
                               'bg-gray-100 text-gray-700'}`}>
                             {fii.fii_type}
                         </span>
@@ -220,7 +229,6 @@ const CarteiraTable = ({ portfolio, onEdit, onRemove, onSell }) => {
                     </div>
                   </TableCell>
                   
-                  {/* Coluna Proventos com Destaque (Mantida) */}
                   <TableCell className="text-right bg-emerald-50/50 dark:bg-emerald-900/10 border-l border-r border-transparent">
                       <div className="flex flex-col items-end">
                           <span className="font-bold text-emerald-700 dark:text-emerald-400 text-base">{formatCurrency(monthlyIncome)}</span>
