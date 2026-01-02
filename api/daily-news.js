@@ -64,13 +64,16 @@ export default async function handler(req, res) {
       </div>
     `;
 
+   // ...
     // 5. Envia o E-mail
     const emailResponse = await resend.emails.send({
       from: 'FII Analyzer <onboarding@resend.dev>',
-      to: process.env.MY_EMAIL.split(','), // Vai para o seu e-mail configurado no .env
+      // O segredo está aqui: .split(',') transforma o texto em lista
+      to: process.env.MY_EMAIL.split(','), 
       subject: `📈 Notícias: ${uniqueTickers.slice(0, 3).join(', ')} e mais...`,
       html: emailHtml,
     });
+    // ...
 
     console.log("✅ E-mail enviado com sucesso!", emailResponse);
     return res.status(200).json({ success: true, emailId: emailResponse.data?.id });
